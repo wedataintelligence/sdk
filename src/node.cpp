@@ -1707,6 +1707,9 @@ shared_ptr<node_vector> NodesCache::getchildren(handle ph)
     pnode_t n;
     shared_ptr<node_vector> children = make_shared<node_vector>();
 
+    numChildFiles[ph] = 0;
+    numChildFolders[ph] = 0;
+
     // children according to DB (maybe outdated)
     handle_vector *hchildren = client->sctable->gethandleschildren(ph);
     handle_vector::iterator it = hchildren->begin();
@@ -1721,6 +1724,9 @@ shared_ptr<node_vector> NodesCache::getchildren(handle ph)
         if (n->parenthandle == ph)
         {
             children->push_back(n);
+
+            if (n->type == FILENODE)    numChildFiles[ph]++;
+            if (n->type == FOLDERNODE)  numChildFolders[ph]++;
         }
 
         it++;
@@ -1747,6 +1753,9 @@ shared_ptr<node_vector> NodesCache::getchildren(handle ph)
             {
 //                movetofront(itn); don't move the node, otherwise: infinite loop
                 children->push_back(n);
+
+                if (n->type == FILENODE)    numChildFiles[ph]++;
+                if (n->type == FOLDERNODE)  numChildFolders[ph]++;
             }
         }
     }
@@ -1754,6 +1763,34 @@ shared_ptr<node_vector> NodesCache::getchildren(handle ph)
     delete hchildren;
     return children;
 }
+
+int NodesCache::getnumchildren(handle ph)
+{
+    return getnumchildfiles(ph) + getnumchildfolders(ph);
+}
+
+int NodesCache::getnumchildfiles(handle ph)
+{
+    // if not calculated yet
+    if (numChildFiles.find(ph) == numChildFiles.end())
+    {
+        getchildren(ph);
+    }
+
+    return numChildFiles[ph];
+}
+
+int NodesCache::getnumchildfolders(handle ph)
+{
+    // if not calculated yet
+    if (numChildFolders.find(ph) == numChildFolders.end())
+    {
+        getchildren(ph);
+    }
+
+    return numChildFolders[ph];
+}
+
 /**
  * @brief NodesCache::put Add/update a node in the persistent storage (DB) and, if not in the cache
  * yet, it's added to the front.

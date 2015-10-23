@@ -8893,27 +8893,19 @@ shared_ptr<node_vector> MegaClient::getpendingshares(handle ph)
 
 int MegaClient::getnumchildren(handle h)
 {
-    int result = 0;
-
-    sctable->getnumchildren(h, &result);
-
-    return result;
+    return cachednodes->getnumchildren(h);
 }
 
 void MegaClient::getnumchildfiles(handle ph)
 {
-    DbQuery *dbquery = new DbQuery(DbQuery::GET_NUM_CHILD_FILES, reqtag);
-    dbquery->setHandle(ph);
-    dbthread->queryqueue.push(dbquery);
-    dbthread->waiter->notify();
+    int result = cachednodes->getnumchildfiles(ph);
+    app->getnumchildfiles_result(result, reqtag, API_OK);
 }
 
 void MegaClient::getnumchildfolders(handle ph)
-{
-    DbQuery *dbquery = new DbQuery(DbQuery::GET_NUM_CHILD_FOLDERS, reqtag);
-    dbquery->setHandle(ph);
-    dbthread->queryqueue.push(dbquery);
-    dbthread->waiter->notify();
+{    
+    int result = cachednodes->getnumchildfolders(ph);
+    app->getnumchildfolders_result(result, reqtag, API_OK);
 }
 
 // a chunk transfer request failed: record failed protocol & host

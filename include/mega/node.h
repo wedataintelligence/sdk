@@ -318,6 +318,12 @@ private:
     // maps handles to cache entries
     hnode_map hmap;
 
+    // maps handles and number of child files
+    map<handle, int> numChildFiles;
+
+    // maps handles and number of child folders
+    map<handle, int> numChildFolders;
+
     // cache entries
     node_list nodes;
 
@@ -341,6 +347,9 @@ public:
     pnode_t get(handle h);
     pnode_t get(string *fingerprint);
     shared_ptr<node_vector> getchildren(handle ph);
+    int getnumchildren(handle ph);
+    int getnumchildfiles(handle ph);
+    int getnumchildfolders(handle ph);
 
     bool put(pnode_t n);
 
