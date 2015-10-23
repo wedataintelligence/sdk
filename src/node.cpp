@@ -1702,6 +1702,58 @@ pnode_t NodesCache::get(string *fingerprint)
     return NULL;
 }
 
+shared_ptr<node_vector> NodesCache::getchildren(handle ph)
+{
+    pnode_t n;
+    shared_ptr<node_vector> children = make_shared<node_vector>();
+
+    // children according to DB (maybe outdated)
+    handle_vector *hchildren = client->sctable->gethandleschildren(ph);
+    handle_vector::iterator it = hchildren->begin();
+    while (it != hchildren->end())
+    {
+        n = get(*it);
+
+        // A node already in cache could be outdated in DB (notified but not yet dumped)
+        // Because of that, the vector of handles might include nodes that are not children
+        // anymore. The following condition assures to return only child nodes that are
+        // stil child nodes
+        if (n->parenthandle == ph)
+        {
+            children->push_back(n);
+        }
+
+        it++;
+    }
+
+    // A node in cache could be a child node, but not according to DB because
+    // the node is pending to write (notified but not yet dumped)
+    for (itn = nodes.begin(); itn != nodes.end(); itn++)
+    {
+        n = *itn;
+
+        if (n->parenthandle == ph)
+        {
+            for (handle_vector::iterator it = hchildren->begin(); it != hchildren->end(); it++)
+            {
+                // if the handle is already reported from DB, skip the node
+                if (*it == n->nodehandle)
+                {
+                    break;
+                }
+            }
+
+            if (it == hchildren->end()) // then, *itn is a child node, despite not yet in DB as that
+            {
+//                movetofront(itn); don't move the node, otherwise: infinite loop
+                children->push_back(n);
+            }
+        }
+    }
+
+    delete hchildren;
+    return children;
+}
 /**
  * @brief NodesCache::put Add/update a node in the persistent storage (DB) and, if not in the cache
  * yet, it's added to the front.

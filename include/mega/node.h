@@ -340,6 +340,7 @@ private:
 public:
     pnode_t get(handle h);
     pnode_t get(string *fingerprint);
+    shared_ptr<node_vector> getchildren(handle ph);
 
     bool put(pnode_t n);
 

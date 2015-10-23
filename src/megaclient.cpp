@@ -8848,22 +8848,7 @@ pnode_t MegaClient::nodebyfingerprint(string* fingerprint)
 
 shared_ptr<node_vector> MegaClient::getchildren(pnode_t node)
 {
-    handle_vector *hchildren = sctable->gethandleschildren(node->nodehandle);
-
-    shared_ptr<node_vector> children = make_shared<node_vector>();
-
-    pnode_t n;
-    handle_vector::iterator it = hchildren->begin();
-    while (it != hchildren->end())
-    {
-        n = cachednodes->get(*it);
-        children->push_back(n);
-
-        it++;
-    }
-
-    delete hchildren;
-    return children;
+    return cachednodes->getchildren(node->nodehandle);
 }
 
 shared_ptr<node_vector> MegaClient::getoutshares(handle ph)
