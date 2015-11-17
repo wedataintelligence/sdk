@@ -37,6 +37,8 @@
 // platform-specific includes and defines
 #ifdef _WIN32
 #include "mega/win32/megasys.h"
+#elif EMSCRIPTEN
+#include "mega/js/megasys.h"
 #else
 #include "mega/posix/megasys.h"
 #endif

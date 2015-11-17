@@ -38,6 +38,10 @@
 #include <cctype>
 #include <locale>
 
+#ifdef EMSCRIPTEN
+#include <emscripten.h>
+#endif
+
 #ifndef _WIN32
 #ifndef _LARGEFILE64_SOURCE
     #define _LARGEFILE64_SOURCE
@@ -64,7 +68,7 @@
 
 #endif
 
-#if (!defined(_WIN32) && !defined(USE_CURL_PUBLIC_KEY_PINNING)) || defined(WINDOWS_PHONE)
+#if (!defined(_WIN32) && !defined(USE_CURL_PUBLIC_KEY_PINNING) && !defined(EMSCRIPTEN)) || defined(WINDOWS_PHONE)
 #include <openssl/rand.h>
 #endif
 
@@ -2383,6 +2387,7 @@ void MegaApiImpl::init(MegaApi *api, const char *appKey, MegaGfxProcessor* proce
     fsAccess = new MegaFileSystemAccess(fseventsfd);
 #endif
 
+#ifndef EMSCRIPTEN
 	if (basePath)
 	{
 		string sBasePath = basePath;
@@ -2395,8 +2400,12 @@ void MegaApiImpl::init(MegaApi *api, const char *appKey, MegaGfxProcessor* proce
 		}
 		dbAccess = new MegaDbAccess(&sBasePath);
 	}
-	else dbAccess = NULL;
-
+	else
+#endif
+    {
+        dbAccess = NULL;
+    }
+    
 	gfxAccess = NULL;
 	if(processor)
 	{
@@ -2420,9 +2429,21 @@ void MegaApiImpl::init(MegaApi *api, const char *appKey, MegaGfxProcessor* proce
     httpio->unlock();
 #endif
 
+#ifndef EMSCRIPTEN
     //Start blocking thread
 	threadExit = 0;
     thread.start(threadEntryPoint, this);
+#else
+    emscripten_set_main_loop_arg(MegaApiImpl::emscriptenLoop, this, 5, false);
+#endif
+}
+
+void MegaApiImpl::emscriptenLoop(void *param)
+{
+    MegaApiImpl *p = (MegaApiImpl *)param;
+    p->sendPendingTransfers();
+    p->sendPendingRequests();
+    p->client->exec();
 }
 
 MegaApiImpl::~MegaApiImpl()
@@ -2614,7 +2635,7 @@ void MegaApiImpl::addEntropy(char *data, unsigned int size)
         EdDSA::rng.IncorporateEntropy((const byte*)data, size);
 #endif
 
-#if (!defined(_WIN32) && !defined(USE_CURL_PUBLIC_KEY_PINNING)) || defined(WINDOWS_PHONE)
+#if (!defined(_WIN32) && !defined(USE_CURL_PUBLIC_KEY_PINNING) && !defined(EMSCRIPTEN)) || defined(WINDOWS_PHONE)
     RAND_seed(data, size);
 #endif
 }
@@ -2887,7 +2908,7 @@ void MegaApiImpl::loop()
         if(r & Waiter::NEEDEXEC)
         {
             sendPendingTransfers();
-            sendPendingRequests();
+            sendPendingRequests();           
             if(threadExit)
                 break;
 

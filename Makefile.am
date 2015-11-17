@@ -30,7 +30,7 @@ include m4/aminclude.am
 if WIN32
 AM_CPPFLAGS+=-I$(top_srcdir)/include/mega/win32
 else
-AM_CPPFLAGS+=-I$(top_srcdir)/include/mega/posix
+AM_CPPFLAGS+=-I$(top_srcdir)/include/mega/js
 endif
 
 VERSION_INFO=$(LT_CURRENT):$(LT_REVISION):$(LT_AGE)

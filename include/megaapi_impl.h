@@ -34,7 +34,7 @@
 #include "mega/proxy.h"
 #include "megaapi.h"
 
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(EMSCRIPTEN)
     #if (!defined(USE_CURL_PUBLIC_KEY_PINNING)) || defined(WINDOWS_PHONE)
     #include <openssl/ssl.h>
     #include <openssl/rand.h>
@@ -110,6 +110,10 @@ class MegaGfxProc : public GfxProcExternal {};
     typedef CurlHttpIO MegaHttpIO;
     typedef PosixFileSystemAccess MegaFileSystemAccess;
     typedef PosixWaiter MegaWaiter;
+    #elif EMSCRIPTEN
+    class MegaHttpIO : public JSHttpIO {};
+    class MegaFileSystemAccess : public PosixFileSystemAccess {};
+    class MegaWaiter : public JsWaiter {};
     #else
     class MegaHttpIO : public CurlHttpIO {};
     class MegaFileSystemAccess : public PosixFileSystemAccess {};
@@ -117,11 +121,27 @@ class MegaGfxProc : public GfxProcExternal {};
     #endif
 #endif
 
+#ifndef EMSCRIPTEN
 class MegaDbAccess : public SqliteDbAccess
 {
 	public:
 		MegaDbAccess(string *basePath = NULL) : SqliteDbAccess(basePath){}
 };
+#else
+class MegaDbAccess : public DbAccess
+{
+    virtual void rewind() {}
+    virtual bool next(uint32_t*, string*) { return false; }
+    virtual bool get(uint32_t, string*) { return false; }
+    virtual bool put(uint32_t, char*, unsigned) { return false; }
+    virtual bool del(uint32_t) { return false; }
+    virtual void truncate() {}
+    virtual void begin() {}
+    virtual void commit() {}
+    virtual void abort() {}
+    virtual void remove() {}
+};
+#endif
 
 class ExternalLogger : public Logger
 {
@@ -1229,6 +1249,11 @@ protected:
         void init(MegaApi *api, const char *appKey, MegaGfxProcessor* processor, const char *basePath = NULL, const char *userAgent = NULL, int fseventsfd = -1);
 
         static void *threadEntryPoint(void *param);
+
+#ifdef EMSCRIPTEN
+        static void emscriptenLoop(void *param);
+#endif
+
         static ExternalLogger *externalLogger;
 
         void fireOnRequestStart(MegaRequestPrivate *request);

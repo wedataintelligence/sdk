@@ -82,3 +82,12 @@ Release
 
 # Mega SDK runtime
 *.db-journal
+
+# JS stuff
+node_modules
+test.html
+test.html.mem
+test.js
+a.out.js
+a.out.js.mem
+
