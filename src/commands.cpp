@@ -39,6 +39,8 @@ HttpReqCommandPutFA::HttpReqCommandPutFA(MegaClient* client, handle cth, fatype 
     persistent = true;  // object will be recycled either for retry or for
                         // posting to the file attribute server
 
+    arg("ssl", 2);
+
     th = cth;
     type = ctype;
     data = cdata;
@@ -100,6 +102,8 @@ CommandGetFA::CommandGetFA(int p, handle fahref, bool chunked)
 
     cmd("ufa");
     arg("fah", (byte*)&fahref, sizeof fahref);
+
+    arg("ssl", 2);
 
     if (chunked)
     {
@@ -212,6 +216,9 @@ CommandPutFile::CommandPutFile(TransferSlot* ctslot, int ms)
     tslot = ctslot;
 
     cmd("u");
+
+    arg("ssl", 2);
+
     arg("s", tslot->fa->size);
     arg("ms", ms);
 }
@@ -366,6 +373,8 @@ CommandGetFile::CommandGetFile(TransferSlot* ctslot, byte* key, handle h, bool p
     cmd("g");
     arg(p || auth ? "n" : "p", (byte*)&h, MegaClient::NODEHANDLE);
     arg("g", 1);
+
+    arg("ssl", 2);
 
     if(auth)
     {

@@ -1145,6 +1145,8 @@ void MegaClient::exec()
                 pendingsc->posturl.append("sc?sn=");
                 pendingsc->posturl.append(scsn);
                 pendingsc->posturl.append(auth);
+
+		pendingsc->posturl.append("&ssl=1");
             }
 
             pendingsc->type = REQ_JSON;
