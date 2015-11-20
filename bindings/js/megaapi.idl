@@ -1,0 +1,819 @@
+
+[Prefix="mega::"]
+interface MegaGfxProcessor
+{
+    boolean readBitmap(DOMString path);
+    long getWidth();
+    long getHeight();
+    long getBitmapDataSize(long width, long height, long px, long py, long rw, long rh);
+    boolean getBitmapData(DOMString bitmapData, long size);
+    void freeBitmap();
+};
+
+[Prefix="mega::"]
+interface MegaProxy
+{
+/*    enum {
+        "PROXY_NONE",
+        "PROXY_AUTO",
+        "PROXY_CUSTOM"};*/
+
+    void setProxyType(long proxyType);
+    void setProxyURL(DOMString proxyURL);
+    void setCredentials(DOMString username, DOMString password);
+    long getProxyType();
+    [Const] DOMString getProxyURL();
+    boolean credentialsNeeded();
+    [Const] DOMString getUsername();
+    [Const] DOMString getPassword();
+};
+
+[Prefix="mega::"]
+interface MegaLogger
+{
+    void log(DOMString time, long loglevel, DOMString source, DOMString message);
+};
+
+[Prefix="mega::"]
+interface MegaNode
+{
+/*    enum {
+        "TYPE_UNKNOWN",
+        "TYPE_FILE",
+        "TYPE_FOLDER",
+        "TYPE_ROOT",
+        "TYPE_INCOMING",
+        "TYPE_RUBBISH"
+    };*/
+
+/*    enum
+    {
+        "CHANGE_TYPE_REMOVED",
+        "CHANGE_TYPE_ATTRIBUTES",
+        "CHANGE_TYPE_OWNER",
+        "CHANGE_TYPE_TIMESTAMP",
+        "CHANGE_TYPE_FILE_ATTRIBUTES",
+        "CHANGE_TYPE_INSHARE",
+        "CHANGE_TYPE_OUTSHARE",
+        "CHANGE_TYPE_PARENT",
+        "CHANGE_TYPE_PENDINGSHARE"
+    };*/
+
+    long getType();
+    [Const] DOMString getName();
+    boolean hasCustomAttrs();
+    MegaStringList getCustomAttrNames();
+    [Const] DOMString getCustomAttr(DOMString attrName);
+    DOMString getBase64Handle();
+    long getSize();
+    long getCreationTime();
+    long getModificationTime();
+    //MegaHandle getHandle();
+    //MegaHandle getParentHandle();
+    DOMString getBase64Key();
+    long getTag();
+    long getExpirationTime();
+    //MegaHandle getPublicHandle();
+    MegaNode getPublicNode();
+    DOMString getPublicLink();
+    boolean isFile();
+    boolean isFolder();
+    boolean isRemoved();
+    boolean hasChanged(long changeType);
+    long getChanges();
+    boolean hasThumbnail();
+    boolean hasPreview();
+    boolean isPublic();
+    boolean isShared();
+    boolean isOutShare();
+    boolean isInShare();
+    boolean isExported();
+    boolean isExpired();
+    boolean isTakenDown();
+};
+
+[Prefix="mega::"]
+interface MegaUser
+{
+/*    enum {
+        "VISIBILITY_UNKNOWN",
+        "VISIBILITY_HIDDEN",
+        "VISIBILITY_VISIBLE",
+        "VISIBILITY_ME"
+    };*/
+
+/*    enum
+    {
+        "CHANGE_TYPE_AUTH",
+        "CHANGE_TYPE_LSTINT",
+        "CHANGE_TYPE_AVATAR",
+        "CHANGE_TYPE_FIRSTNAME",
+        "CHANGE_TYPE_LASTNAME"
+    };*/
+
+    [Const] DOMString getEmail();
+    long getVisibility();
+    long getTimestamp();
+    boolean hasChanged(long changeType);
+    long getChanges();
+};
+
+[Prefix="mega::"]
+interface MegaShare
+{
+/*    enum {
+        "ACCESS_UNKNOWN",
+        "ACCESS_READ",
+        "ACCESS_READWRITE",
+        "ACCESS_FULL",
+        "ACCESS_OWNER"
+    };*/
+
+    [Const] DOMString getUser();
+    //MegaHandle getNodeHandle();
+    long getAccess();
+    long getTimestamp();
+};
+
+[Prefix="mega::"]
+interface MegaStringList
+{
+    [Const] DOMString get(long i);
+    long size();
+};
+
+[Prefix="mega::"]
+interface MegaNodeList
+{
+    MegaNode get(long i);
+    long size();
+};
+
+[Prefix="mega::"]
+interface MegaUserList
+{
+    MegaUser get(long i);
+    long size();
+};
+
+[Prefix="mega::"]
+interface MegaShareList
+{
+    MegaShare get(long i);
+    long size();
+};
+
+[Prefix="mega::"]
+interface MegaTransferList
+{
+    MegaTransfer get(long i);
+    long size();
+};
+
+[Prefix="mega::"]
+interface MegaContactRequestList
+{
+    MegaContactRequest get(long i);
+    long size();
+};
+
+[Prefix="mega::"]
+interface MegaRequest
+{
+   /*enum {
+        "TYPE_LOGIN",
+        "TYPE_CREATE_FOLDER",
+        "TYPE_MOVE",
+        "TYPE_COPY",
+        "TYPE_RENAME",
+        "TYPE_REMOVE",
+        "TYPE_SHARE",
+        "TYPE_IMPORT_LINK,
+        "TYPE_EXPORT,
+        "TYPE_FETCH_NODES",
+        "TYPE_ACCOUNT_DETAILS",
+        "TYPE_CHANGE_PW",
+        "TYPE_UPLOAD",
+        "TYPE_LOGOUT",
+        "TYPE_GET_PUBLIC_NODE",
+        "TYPE_GET_ATTR_FILE",
+        "TYPE_SET_ATTR_FILE",
+        "TYPE_GET_ATTR_USER",
+        "TYPE_SET_ATTR_USER",
+        "TYPE_RETRY_PENDING_CONNECTIONS",
+        "TYPE_ADD_CONTACT",
+        "TYPE_REMOVE_CONTACT",
+        "TYPE_CREATE_ACCOUNT",
+        "TYPE_CONFIRM_ACCOUNT",
+        "TYPE_QUERY_SIGNUP_LINK",
+        "TYPE_ADD_SYNC",
+        "TYPE_REMOVE_SYNC",
+        "TYPE_REMOVE_SYNCS",
+        "TYPE_PAUSE_TRANSFERS",
+        "TYPE_CANCEL_TRANSFER",
+        "TYPE_CANCEL_TRANSFERS",
+        "TYPE_DELETE",
+        "TYPE_REPORT_EVENT",
+        "TYPE_CANCEL_ATTR_FILE",
+        "TYPE_GET_PRICING",
+        "TYPE_GET_PAYMENT_ID",
+        "TYPE_GET_USER_DATA",
+        "TYPE_LOAD_BALANCING",
+        "TYPE_KILL_SESSION",
+        "TYPE_SUBMIT_PURCHASE_RECEIPT",
+        "TYPE_CREDIT_CARD_STORE",
+        "TYPE_UPGRADE_ACCOUNT",
+        "TYPE_CREDIT_CARD_QUERY_SUBSCRIPTIONS",
+        "TYPE_CREDIT_CARD_CANCEL_SUBSCRIPTIONS",
+        "TYPE_GET_SESSION_TRANSFER_URL",
+        "TYPE_GET_PAYMENT_METHODS",
+        "TYPE_INVITE_CONTACT",
+        "TYPE_REPLY_CONTACT_REQUEST",
+        "TYPE_SUBMIT_FEEDBACK",
+        "TYPE_SEND_EVENT",
+        "TYPE_CLEAN_RUBBISH_BIN",
+        "TYPE_SET_ATTR_NODE"
+    };*/
+
+    long getType();
+    [Const] DOMString getRequestString();
+    //DOMString toString();
+    //MegaHandle getNodeHandle();
+    [Const] DOMString getLink();
+    //MegaHandle getParentHandle();
+    [Const] DOMString getSessionKey();
+    [Const] DOMString getName();
+    [Const] DOMString getEmail();
+    [Const] DOMString getPassword();
+    [Const] DOMString getNewPassword();
+    [Const] DOMString getPrivateKey();
+    long getAccess();
+    [Const] DOMString getFile();
+    long getNumRetry();
+    MegaNode getPublicNode();
+    MegaNode getPublicMegaNode();
+    long getParamType();
+    [Const] DOMString getText();
+    long getNumber();
+    boolean getFlag();
+    long getTransferredBytes();
+    long getTotalBytes();
+    MegaRequestListener getListener();
+    MegaAccountDetails getMegaAccountDetails();
+    MegaPricing getPricing();
+    long getTransferTag();
+    long getNumDetails();
+    long getTag();
+};
+
+[Prefix="mega::"]
+interface MegaTransfer
+{
+    /*enum {
+        "TYPE_DOWNLOAD",
+        "TYPE_UPLOAD"
+    };*/
+
+    long getType();
+    [Const] DOMString getTransferString();
+    //DOMString toString();
+    long getStartTime();
+    long getTransferredBytes();
+    long getTotalBytes();
+    [Const] DOMString getPath();
+    [Const] DOMString getParentPath();
+    //MegaHandle getNodeHandle();
+    //MegaHandle getParentHandle();
+    long getStartPos();
+    long getEndPos();
+    [Const] DOMString getFileName();
+    MegaTransferListener getListener();
+    long getNumRetry();
+    long getMaxRetries();
+    long getTag();
+    long getSpeed();
+    long getDeltaSize();
+    long getUpdateTime();
+    MegaNode getPublicMegaNode();
+    boolean isSyncTransfer();
+    boolean isStreamingTransfer();
+    DOMString getLastBytes();
+    boolean isFolderTransfer();
+    long getFolderTransferTag();
+};
+
+[Prefix="mega::"]
+interface MegaContactRequest
+{
+    /*enum {
+        "STATUS_UNRESOLVED",
+        "STATUS_ACCEPTED",
+        "STATUS_DENIED",
+        "STATUS_IGNORED",
+        "STATUS_DELETED",
+        "STATUS_REMINDED"
+    };
+
+    enum {
+        "REPLY_ACTION_ACCEPT",
+        "REPLY_ACTION_DENY",
+        "REPLY_ACTION_IGNORE"
+    };
+
+    enum {
+        "INVITE_ACTION_ADD",
+        "INVITE_ACTION_DELETE",
+        "INVITE_ACTION_REMIND"
+    };*/
+
+    //MegaHandle getHandle();
+    DOMString getSourceEmail();
+    DOMString getSourceMessage();
+    DOMString getTargetEmail();
+    long getCreationTime();
+    long getModificationTime();
+    long getStatus();
+    boolean isOutgoing();
+};
+
+[Prefix="mega::"]
+interface MegaError
+{
+    /*enum
+    {
+        "API_OK",
+        "API_EINTERNAL",
+        "API_EARGS",
+        "API_EAGAIN",
+        "API_ERATELIMIT",
+        "API_EFAILED",
+        "API_ETOOMANY",
+        "API_ERANGE",
+        "API_EEXPIRED",
+        "API_ENOENT",
+        "API_ECIRCULAR",
+        "API_EACCESS",
+        "API_EEXIST",
+        "API_EINCOMPLETE",
+        "API_EKEY",
+        "API_ESID",
+        "API_EBLOCKED",
+        "API_EOVERQUOTA",
+        "API_ETEMPUNAVAIL",
+        "API_ETOOMANYCONNECTIONS",
+        "API_EWRITE",
+        "API_EREAD",
+        "API_EAPPKEY",
+        "API_ESSL",
+
+        "PAYMENT_ECARD",
+        "PAYMENT_EBILLING",
+        "PAYMENT_EFRAUD",
+        "PAYMENT_ETOOMANY",
+        "PAYMENT_EBALANCE",
+        "PAYMENT_EGENERIC"
+    };*/
+
+
+    //MegaError(long errorCode);
+    long getErrorCode();
+    [Const] DOMString getErrorString();
+    //DOMString toString();
+    //static DOMString getErrorString(long errorCode);
+};
+
+[Prefix="mega::"]
+interface MegaTreeProcessor
+{
+    boolean processMegaNode(MegaNode node);
+};
+
+[Prefix="mega::"]
+interface MegaRequestListener
+{
+    void onRequestStart(MegaApi api, MegaRequest request);
+    void onRequestFinish(MegaApi api, MegaRequest request, MegaError e);
+    void onRequestUpdate(MegaApi api, MegaRequest request);
+    void onRequestTemporaryError(MegaApi api, MegaRequest request, MegaError error);
+};
+
+[Prefix="mega::"]
+interface MegaTransferListener
+{
+    void onTransferStart(MegaApi api, MegaTransfer transfer);
+    void onTransferFinish(MegaApi api, MegaTransfer transfer, MegaError error);
+    void onTransferUpdate(MegaApi api, MegaTransfer transfer);
+    void onTransferTemporaryError(MegaApi api, MegaTransfer transfer, MegaError error);
+    boolean onTransferData(MegaApi api, MegaTransfer transfer, DOMString buffer, long size);
+};
+
+[Prefix="mega::"]
+interface MegaGlobalListener
+{
+    void onUsersUpdate(MegaApi api, MegaUserList users);
+    void onNodesUpdate(MegaApi api, MegaNodeList nodes);
+    void onAccountUpdate(MegaApi api);
+    void onContactRequestsUpdate(MegaApi api, MegaContactRequestList requests);
+    void onReloadNeeded(MegaApi api);
+};
+
+[Prefix="mega::"]
+interface MegaListener
+{
+    void onRequestStart(MegaApi api, MegaRequest request);
+    void onRequestFinish(MegaApi api, MegaRequest request, MegaError e);
+    void onRequestUpdate(MegaApi api, MegaRequest request);
+    void onRequestTemporaryError(MegaApi api, MegaRequest request, MegaError error);
+    void onTransferStart(MegaApi api, MegaTransfer transfer);
+    void onTransferFinish(MegaApi api, MegaTransfer transfer, MegaError error);
+    void onTransferUpdate(MegaApi api, MegaTransfer transfer);
+    void onTransferTemporaryError(MegaApi api, MegaTransfer transfer, MegaError error);
+    void onUsersUpdate(MegaApi api, MegaUserList users);
+    void onNodesUpdate(MegaApi api, MegaNodeList nodes);
+    void onAccountUpdate(MegaApi api);
+    void onContactRequestsUpdate(MegaApi api, MegaContactRequestList requests);
+    void onReloadNeeded(MegaApi api);
+};
+
+[Prefix="mega::"]
+interface MegaInputStream
+{
+    long getSize();
+    boolean read(DOMString buffer, long size);
+};
+
+[Prefix="mega::"]
+interface MegaApi
+{
+    /*enum
+    {
+        "STATE_NONE",
+        "STATE_SYNCED",
+        "STATE_PENDING",
+        "STATE_SYNCING",
+        "STATE_IGNORED"
+    };
+
+    enum {
+        "LOG_LEVEL_FATAL",
+        "LOG_LEVEL_ERROR",
+        "LOG_LEVEL_WARNING",
+        "LOG_LEVEL_INFO",
+        "LOG_LEVEL_DEBUG",
+        "LOG_LEVEL_MAX"
+    };
+
+    enum {
+        "ATTR_TYPE_THUMBNAIL",
+        "ATTR_TYPE_PREVIEW"
+    };
+
+    enum {
+        "USER_ATTR_AVATAR",
+        "USER_ATTR_FIRSTNAME",
+        "USER_ATTR_LASTNAME",
+        "USER_ATTR_AUTHRING",
+        "USER_ATTR_LAST_INTERACTION"
+    };
+
+    enum {
+        "PAYMENT_METHOD_BALANCE",
+        "PAYMENT_METHOD_PAYPAL",
+        "PAYMENT_METHOD_ITUNES",
+        "PAYMENT_METHOD_GOOGLE_WALLET",
+        "PAYMENT_METHOD_BITCOIN",
+        "PAYMENT_METHOD_UNIONPAY",
+        "PAYMENT_METHOD_FORTUMO",
+        "PAYMENT_METHOD_CREDIT_CARD",
+        "PAYMENT_METHOD_CENTILI"
+    };
+
+    enum {
+        "TRANSFER_METHOD_NORMAL",
+        "TRANSFER_METHOD_ALTERNATIVE_PORT",
+        "TRANSFER_METHOD_AUTO"
+    };*/
+
+    void MegaApi(DOMString appKey, DOMString basePath, DOMString userAgent);
+    void MegaApi(DOMString appKey, MegaGfxProcessor processor, DOMString basePath, DOMString userAgent);
+    void addListener(MegaListener listener);
+    void addRequestListener(MegaRequestListener listener);
+    void addTransferListener(MegaTransferListener listener);
+    void addGlobalListener(MegaGlobalListener listener);
+    void removeListener(MegaListener listener);
+    void removeRequestListener(MegaRequestListener listener);
+    void removeTransferListener(MegaTransferListener listener);
+    void removeGlobalListener(MegaGlobalListener listener);
+    MegaRequest getCurrentRequest();
+    MegaTransfer getCurrentTransfer();
+    MegaError getCurrentError();
+    MegaNodeList getCurrentNodes();
+    MegaUserList getCurrentUsers();
+    DOMString getBase64PwKey(DOMString password);
+    DOMString getStringHash(DOMString base64pwkey, DOMString email);
+    void getSessionTransferURL(DOMString path, MegaRequestListener listener);
+    //static MegaHandle base32ToHandle(DOMString base32Handle);
+    //static MegaHandle base64ToHandle(DOMString base64Handle);
+    //static DOMString handleToBase64(MegaHandle handle);
+    //static DOMString userHandleToBase64(MegaHandle handle);
+    static void addEntropy(DOMString data, unsigned long size);
+    void retryPendingConnections(boolean disconnect, boolean includexfers, MegaRequestListener listener);
+    void login(DOMString email, DOMString password, MegaRequestListener listener);
+    void loginToFolder(DOMString megaFolderLink, MegaRequestListener listener);
+    void fastLogin(DOMString email, DOMString stringHash, DOMString base64pwkey, MegaRequestListener listener);
+    void fastLogin(DOMString session, MegaRequestListener listener);
+    //void killSession(MegaHandle sessionHandle, MegaRequestListener listener);
+    void getUserData(MegaRequestListener listener);
+    void getUserData(MegaUser user, MegaRequestListener listener);
+    //void getUserData(DOMString user, MegaRequestListener listener);
+    DOMString dumpSession();
+    DOMString dumpXMPPSession();
+    void createAccount(DOMString email, DOMString password, DOMString name, MegaRequestListener listener);
+    void fastCreateAccount(DOMString email, DOMString base64pwkey, DOMString name, MegaRequestListener listener);
+    void querySignupLink(DOMString link, MegaRequestListener listener);
+    void confirmAccount(DOMString link, DOMString password, MegaRequestListener listener);
+    void fastConfirmAccount(DOMString link, DOMString base64pwkey, MegaRequestListener listener);
+    void setProxySettings(MegaProxy proxySettings);
+    MegaProxy getAutoProxySettings();
+    long isLoggedIn();
+    DOMString getMyEmail();
+    DOMString getMyUserHandle();
+    static void setLogLevel(long logLevel);
+    static void setLoggerObject(MegaLogger megaLogger);
+    static void log(long logLevel, DOMString message, DOMString filename, long line);
+    void createFolder(DOMString name, MegaNode parent, MegaRequestListener listener);
+    void moveNode(MegaNode node, MegaNode newParent, MegaRequestListener listener);
+    void copyNode(MegaNode node, MegaNode newParent, MegaRequestListener listener);
+    void copyNode(MegaNode node, MegaNode newParent, DOMString newName, MegaRequestListener listener);
+    void renameNode(MegaNode node, DOMString newName, MegaRequestListener listener);
+    void remove(MegaNode node, MegaRequestListener listener);
+    void cleanRubbishBin(MegaRequestListener listener);
+    //void sendFileToUser(MegaNode node, MegaUser user, MegaRequestListener listener);
+    void sendFileToUser(MegaNode node, DOMString email, MegaRequestListener listener);
+    //void share(MegaNode node, MegaUser user, long level, MegaRequestListener listener);
+    void share(MegaNode node, DOMString email, long level, MegaRequestListener listener);
+    void importFileLink(DOMString megaFileLink, MegaNode parent, MegaRequestListener listener);
+    void getPublicNode(DOMString megaFileLink, MegaRequestListener listener);
+    void getThumbnail(MegaNode node, DOMString dstFilePath, MegaRequestListener listener);
+    void getPreview(MegaNode node, DOMString dstFilePath, MegaRequestListener listener);
+    void getUserAvatar(MegaUser user, DOMString dstFilePath, MegaRequestListener listener);
+    //void getUserAvatar(DOMString dstFilePath, MegaRequestListener listener);
+    void getUserAttribute(MegaUser user, long type, MegaRequestListener listener);
+    void getUserAttribute(long type, MegaRequestListener listener);
+    void cancelGetThumbnail(MegaNode node, MegaRequestListener listener);
+    void cancelGetPreview(MegaNode node, MegaRequestListener listener);
+    void setThumbnail(MegaNode node, DOMString srcFilePath, MegaRequestListener listener);
+    void setPreview(MegaNode node, DOMString srcFilePath, MegaRequestListener listener);
+    void setAvatar(DOMString srcFilePath, MegaRequestListener listener);
+    void setUserAttribute(long type, DOMString value, MegaRequestListener listener);
+    void setCustomNodeAttribute(MegaNode node, DOMString attrName, DOMString value,  MegaRequestListener listener);
+    void exportNode(MegaNode node, MegaRequestListener listener);
+    void exportNode(MegaNode node, long expireTime, MegaRequestListener listener);
+    void disableExport(MegaNode node, MegaRequestListener listener);
+    void fetchNodes(MegaRequestListener listener);
+    void getAccountDetails(MegaRequestListener listener);
+    void getExtendedAccountDetails(boolean sessions, boolean purchases, boolean transactions, MegaRequestListener listener);
+    void getPricing(MegaRequestListener listener);
+    //void getPaymentId(MegaHandle productHandle, MegaRequestListener listener);
+    //void upgradeAccount(MegaHandle productHandle, long paymentMethod, MegaRequestListener listener);
+    void submitPurchaseReceipt(DOMString receipt, MegaRequestListener listener);
+    void submitPurchaseReceipt(long gateway, DOMString receipt, MegaRequestListener listener);
+    void creditCardStore(DOMString address1, DOMString address2, DOMString city,
+                         DOMString province, DOMString country, DOMString postalcode,
+                         DOMString firstname, DOMString lastname, DOMString creditcard,
+                         DOMString expire_month, DOMString expire_year, DOMString cv2,
+                         MegaRequestListener listener);
+
+
+    void creditCardQuerySubscriptions(MegaRequestListener listener);
+    void creditCardCancelSubscriptions(DOMString reason, MegaRequestListener listener);
+    void getPaymentMethods(MegaRequestListener listener);
+    DOMString exportMasterKey();
+    void changePassword(DOMString oldPassword, DOMString newPassword, MegaRequestListener listener);
+    void addContact(DOMString email, MegaRequestListener listener);
+    void inviteContact(DOMString email, DOMString message, long action, MegaRequestListener listener);
+    void replyContactRequest(MegaContactRequest request, long action, MegaRequestListener listener);
+    void removeContact(MegaUser user, MegaRequestListener listener);
+    void logout(MegaRequestListener listener);
+    void localLogout(MegaRequestListener listener);
+    void submitFeedback(long rating, DOMString comment, MegaRequestListener listener);
+    void sendEvent(long eventType, DOMString message, MegaRequestListener listener);
+    void reportDebugEvent(DOMString text, MegaRequestListener listener);
+
+    ///////////////////   TRANSFERS ///////////////////
+    void startUpload(DOMString localPath, MegaNode parent, MegaTransferListener listener);
+    //void startUpload(DOMString localPath, MegaNode parent, long mtime, MegaTransferListener listener);
+    void startUpload(DOMString localPath, MegaNode parent, DOMString fileName, MegaTransferListener listener);
+    void startUpload(DOMString localPath, MegaNode parent, DOMString fileName, long mtime, MegaTransferListener listener);
+    void startDownload(MegaNode node, DOMString localPath, MegaTransferListener listener);
+    void startStreaming(MegaNode node, long startPos, long size, MegaTransferListener listener);
+    void cancelTransfer(MegaTransfer transfer, MegaRequestListener listener);
+    void cancelTransferByTag(long transferTag, MegaRequestListener listener);
+    void cancelTransfers(long type, MegaRequestListener listener);
+    void pauseTransfers(boolean pause, MegaRequestListener listener);
+    void pauseTransfers(boolean pause, long direction, MegaRequestListener listener);
+    boolean areTransfersPaused(long direction);
+    void setUploadLimit(long bpslimit);
+    void setDownloadMethod(long method);
+    void setUploadMethod(long method);
+    long getDownloadMethod();
+    long getUploadMethod();
+    MegaTransferList getTransfers();
+    MegaTransfer getTransferByTag(long transferTag);
+    MegaTransferList getTransfers(long type);
+    MegaTransferList getChildTransfers(long transferTag);
+    void update();
+    boolean isWaiting();
+    long getNumPendingUploads();
+    long getNumPendingDownloads();
+    long getTotalUploads();
+    long getTotalDownloads();
+    void resetTotalDownloads();
+    void resetTotalUploads();
+    long getTotalDownloadedBytes();
+    long getTotalUploadedBytes();
+    void updateStats();
+
+    /*enum {
+        "ORDER_NONE",
+        "ORDER_DEFAULT_ASC",
+        "ORDER_DEFAULT_DESC",
+        "ORDER_SIZE_ASC",
+        "ORDER_SIZE_DESC",
+        "ORDER_CREATION_ASC",
+        "ORDER_CREATION_DESC",
+        "ORDER_MODIFICATION_ASC",
+        "ORDER_MODIFICATION_DESC",
+        "ORDER_ALPHABETICAL_ASC",
+        "ORDER_ALPHABETICAL_DESC"
+    };*/
+
+    long getNumChildren(MegaNode parent);
+    long getNumChildFiles(MegaNode parent);
+    long getNumChildFolders(MegaNode parent);
+    MegaNodeList getChildren(MegaNode parent, long order);
+    long getIndex(MegaNode node, long order);
+    MegaNode getChildNode(MegaNode parent, DOMString name);
+    MegaNode getParentNode(MegaNode node);
+    DOMString getNodePath(MegaNode node);
+    MegaNode getNodeByPath(DOMString path, MegaNode n);
+    //MegaNode getNodeByHandle(MegaHandle h);
+    //MegaContactRequest getContactRequestByHandle(MegaHandle handle);
+    MegaUserList getContacts();
+    MegaUser getContact(DOMString email);
+    MegaNodeList getInShares(MegaUser user);
+    MegaNodeList getInShares();
+    MegaShareList getInSharesList();
+    boolean isShared(MegaNode node);
+    boolean isOutShare(MegaNode node);
+    boolean isInShare(MegaNode node);
+    boolean isPendingShare(MegaNode node);
+    MegaShareList getOutShares();
+    MegaShareList getOutShares(MegaNode node);
+    MegaShareList getPendingOutShares();
+    MegaShareList getPendingOutShares(MegaNode node);
+    MegaContactRequestList getIncomingContactRequests();
+    MegaContactRequestList getOutgoingContactRequests();
+    long getAccess(MegaNode node);
+    long getSize(MegaNode node);
+    //DOMString getFingerprint(DOMString filePath);
+    DOMString getFingerprint(MegaNode node);
+    DOMString getFingerprint(MegaInputStream inputStream, long mtime);
+    MegaNode getNodeByFingerprint(DOMString fingerprint);
+    MegaNode getNodeByFingerprint(DOMString fingerprint, MegaNode parent);
+    boolean hasFingerprint(DOMString fingerprint);
+    //DOMString getCRC(DOMString filePath);
+    DOMString getCRCFromFingerprint(DOMString fingerprint);
+    DOMString getCRC(MegaNode node);
+    MegaNode getNodeByCRC(DOMString crc, MegaNode parent);
+    //MegaError checkAccess(MegaNode node, long level);
+    //MegaError checkMove(MegaNode node, MegaNode target);
+    MegaNode getRootNode();
+    MegaNode getInboxNode();
+    MegaNode getRubbishNode();
+    MegaNodeList search(MegaNode node, DOMString searchString, boolean recursive);
+    boolean processMegaTree(MegaNode node, MegaTreeProcessor processor, boolean recursive);
+    //MegaNode createPublicFileNode(MegaHandle handle, DOMString key, DOMString name,
+    //                               long size, long mtime, MegaHandle parentHandle, DOMString auth);
+    //MegaNode createPublicFolderNode(MegaHandle handle, DOMString name, MegaHandle parentHandle, DOMString auth);
+    [Const] DOMString getVersion();
+    [Const] DOMString getUserAgent();
+    void changeApiUrl(DOMString apiURL, boolean disablepkp);
+    DOMString escapeFsIncompatible(DOMString filename);
+    DOMString unescapeFsIncompatible(DOMString name);
+    boolean createThumbnail(DOMString imagePath, DOMString dstPath);
+    boolean createPreview(DOMString imagePath, DOMString dstPath);
+    static DOMString base64ToBase32(DOMString base64);
+    static DOMString base32ToBase64(DOMString base32);
+    void loadBalancing(DOMString service, MegaRequestListener listener);
+    static DOMString strdup(DOMString buffer);
+    static void removeRecursively(DOMString path);
+    boolean isOnline();
+};
+
+//[Prefix="mega::"]
+//interface MegaHashSignature
+//{
+//    MegaHashSignature(DOMString base64Key);
+//    void init();
+//    void add(DOMString data, unsigned size);
+//    boolean checkSignature(DOMString base64Signature);
+//};
+
+[Prefix="mega::"]
+interface MegaAccountBalance
+{
+    double getAmount();
+    [Const] DOMString getCurrency();
+};
+
+[Prefix="mega::"]
+interface MegaAccountSession
+{
+    long getCreationTimestamp();
+    long getMostRecentUsage();
+    DOMString getUserAgent();
+    DOMString getIP();
+    DOMString getCountry();
+    boolean isCurrent();
+    boolean isAlive();
+    //MegaHandle getHandle();
+};
+
+[Prefix="mega::"]
+interface MegaAccountPurchase
+{
+    long getTimestamp();
+    DOMString getHandle();
+    DOMString getCurrency();
+    double getAmount();
+    long getMethod();
+};
+
+[Prefix="mega::"]
+interface MegaAccountTransaction
+{
+    long getTimestamp();
+    DOMString getHandle();
+    DOMString getCurrency();
+    double getAmount();
+};
+
+[Prefix="mega::"]
+interface MegaAccountDetails
+{
+    /*enum
+    {
+        "ACCOUNT_TYPE_FREE",
+        "ACCOUNT_TYPE_PROI",
+        "ACCOUNT_TYPE_PROII",
+        "ACCOUNT_TYPE_PROIII",
+        "ACCOUNT_TYPE_LITE"
+    };
+
+    enum
+    {
+        "SUBSCRIPTION_STATUS_NONE",
+        "SUBSCRIPTION_STATUS_VALID",
+        "SUBSCRIPTION_STATUS_INVALID"
+    };*/
+
+    long getProLevel();
+    long getProExpiration();
+    long getSubscriptionStatus();
+    long getSubscriptionRenewTime();
+    DOMString getSubscriptionMethod();
+    DOMString getSubscriptionCycle();
+    long getStorageMax();
+    long getStorageUsed();
+    long getTransferMax();
+    long getTransferOwnUsed();
+    long getNumUsageItems();
+    //long getStorageUsed(MegaHandle handle);
+    //long getNumFiles(MegaHandle handle);
+    //long getNumFolders(MegaHandle handle);
+    long getNumBalances();
+    MegaAccountBalance getBalance(long i);
+    long getNumSessions();
+    MegaAccountSession getSession(long i);
+    long getNumPurchases();
+    MegaAccountPurchase getPurchase(long i);
+    long getNumTransactions();
+    MegaAccountTransaction getTransaction(long i);
+};
+
+[Prefix="mega::"]
+interface MegaPricing
+{
+    long getNumProducts();
+    //MegaHandle getHandle(long productIndex);
+    long getProLevel(long productIndex);
+    long getGBStorage(long productIndex);
+    long getGBTransfer(long productIndex);
+    long getMonths(long productIndex);
+    long getAmount(long productIndex);
+    [Const] DOMString getCurrency(long productIndex);
+    [Const] DOMString getDescription(long productIndex);
+    [Const] DOMString getIosID(long productIndex);
+    [Const] DOMString getAndroidID(long productIndex);
+};
