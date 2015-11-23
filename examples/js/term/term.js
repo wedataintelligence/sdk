@@ -1,18 +1,29 @@
+function MegaTerminalListener(aClient, aTerm, aCallback) {
+    var self = this;
+    var listener = new MegaListenerInterface();
+    listener.onRequestStart = function(client, request) {
+        console.debug('onRequestStart', arguments, request.getRequestString());
+    };
+    listener.onRequestFinish = function(client, request, error) {
+        console.debug('onRequestFinish', arguments, request.getRequestString(), error.getErrorCode(), error.getErrorString());
+        self.abort(request.getRequestString(), error.getErrorCode());
+    };
+    listener.onRequestUpdate = function(client, request) {
+        console.debug('onRequestUpdate', arguments, request.getRequestString());
+    };
+    aClient.addListener(listener);
+    aTerm.pause();
+
+    this.abort = function() {
+        aTerm.resume();
+        aClient.removeListener(listener);
+        aCallback.apply(this, arguments);
+    };
+}
 MEGASDK.Terminal = function (client) {
     var $e = $('#terminal').empty();
 
     client.setLogLevel(5);
-    client.addListener({
-        onRequestStart : function (client, request) {
-            console.debug('onRequestStart', arguments);
-        },
-        onRequestUpdate : function (client, request) {
-            console.debug('onRequestUpdate', arguments);
-        },
-        onRequestFinish : function (client, request, error) {
-            console.debug('onRequestFinish', arguments);
-        }
-    });
 
     var colors = {
         'error': '#ff0000',
@@ -35,16 +46,10 @@ MEGASDK.Terminal = function (client) {
         console.debug(argv, arguments);
 
         var oldc = console.log;
-        var ready = function() {
-            term.resume();
-            console.log = oldc;
-            $(window).trigger('resize');
-        };
         console.log = function() {
             var type;
             var msg = String(arguments[0]);
             var args = [].slice.call(arguments, 1);
-            var done = /Request \(.*?\) finished/.test(msg);
             if (msg[0] === '[') {
                 msg = msg.replace(/\[[\d:]+\]\[(.+?)\]\s*/, function(a, b) {
                     type = b;
@@ -58,7 +63,7 @@ MEGASDK.Terminal = function (client) {
                 type = 'debug';
             }
             console[type].apply(console, arguments);
-            if (!type || type === 'info' || type === 'error' || done) {
+            if (type === 'info' || type === 'error') {
                 var color = colors[type];
                 if (color) {
                     var tag = type[0] === 'e' || type[0] === 'w' ? '&#91;!&#93;' : '';
@@ -66,15 +71,16 @@ MEGASDK.Terminal = function (client) {
                 }
                 term.echo.apply(term, [msg].concat(args));
             }
-            if (done) {
-                ready();
-                if (cmd === 'login' && type === 'info') {
-                    tty('fetchNodes', term);
-                }
-            }
         };
 
-        term.pause();
+        var mtl = new MegaTerminalListener(client, term,
+            function(cmd, e) {
+                console.log = oldc;
+                $(window).trigger('resize');
+                if (cmd === 'LOGIN' && e === MEGASDK.MegaError.API_OK) {
+                    tty('fetchNodes', term);
+                }
+            });
 
         var cmd = argv.shift();
         if (cmd === 'createfolder') {
@@ -88,7 +94,7 @@ MEGASDK.Terminal = function (client) {
             }
             else {
                 term.echo("Unknown command: " + (cmd || '(null)'));
-                ready();
+                mtl.abort();
             }
         }
     }, {
@@ -100,7 +106,7 @@ MEGASDK.Terminal = function (client) {
 
     var $term = $('.terminal-output');
     $term.css({
-        "overflow-y" : "scroll",
+        "overflow-y" : "auto",
         "overflow-x" : "hidden",
     });
     $(document.body).css('overflow', 'hidden');
