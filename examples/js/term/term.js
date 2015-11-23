@@ -12,18 +12,23 @@ function MegaTerminalListener(aClient, aTerm, aCallback) {
         console.debug('onRequestUpdate', arguments, request.getRequestString());
     };
     aClient.addListener(listener);
-    aTerm.pause();
 
     this.abort = function() {
         aTerm.resume();
-        aClient.removeListener(listener);
         aCallback.apply(this, arguments);
+    };
+
+    this.reset = function(term, cb) {
+        term.pause();
+        aTerm = term;
+        aCallback = cb;
     };
 }
 MEGASDK.Terminal = function (client) {
     var $e = $('#terminal').empty();
 
     client.setLogLevel(5);
+    var listener = new MegaTerminalListener(client);
 
     var colors = {
         'error': '#ff0000',
@@ -73,7 +78,7 @@ MEGASDK.Terminal = function (client) {
             }
         };
 
-        var mtl = new MegaTerminalListener(client, term,
+        listener.reset(term,
             function(cmd, e) {
                 console.log = oldc;
                 $(window).trigger('resize');
