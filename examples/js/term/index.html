@@ -62,7 +62,7 @@
       };
       window.onerror = function(event) {
         MEGASDK.setStatus('Exception thrown, see JavaScript console');
-        localStorage.clear();
+        //localStorage.clear();
         MEGASDK.setStatus = function(text) {
           if (text) MEGASDK.printErr('[post-exception status] ' + text);
         };
