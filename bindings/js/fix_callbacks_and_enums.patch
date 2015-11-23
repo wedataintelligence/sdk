@@ -1,5 +1,5 @@
 --- tools/webidl_binder.py.orig	2015-11-22 03:26:23.352590876 +0100
-+++ tools/webidl_binder.py	2015-11-22 03:58:20.913982323 +0100
++++ tools/webidl_binder.py	2015-11-23 01:54:27.778906621 +0100
 @@ -80,7 +80,7 @@
  %s.prototype.__class__ = %s;
  %s.__cache__ = {};
@@ -27,3 +27,13 @@
            return_postfix,
            (', ' if js_call_args else '') + js_call_args)]
  
+@@ -632,6 +632,9 @@
+ }
+ ''' % (name, function_id, value)]
+     symbols = value.split('::')
++    while len(symbols) > 2:
++      symbols.pop(0);
++
+     if len(symbols) == 1:
+       identifier = symbols[0]
+       deferred_js += ["Module['%s'] = _emscripten_enum_%s();\n" % (identifier, function_id)]

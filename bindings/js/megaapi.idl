@@ -10,14 +10,16 @@ interface MegaGfxProcessor
     void freeBitmap();
 };
 
+enum ProxyType
+{
+    "mega::MegaProxy::PROXY_NONE",
+    "mega::MegaProxy::PROXY_AUTO",
+    "mega::MegaProxy::PROXY_CUSTOM"
+};
+
 [Prefix="mega::"]
 interface MegaProxy
 {
-/*    enum {
-        "PROXY_NONE",
-        "PROXY_AUTO",
-        "PROXY_CUSTOM"};*/
-
     void setProxyType(long proxyType);
     void setProxyURL(DOMString proxyURL);
     void setCredentials(DOMString username, DOMString password);
@@ -35,31 +37,32 @@ interface MegaLoggerInterface
     void log(DOMString time, long loglevel, DOMString source, DOMString message);
 };
 
+enum NodeType
+{
+    "mega::MegaNode::TYPE_UNKNOWN",
+    "mega::MegaNode::TYPE_FILE",
+    "mega::MegaNode::TYPE_FOLDER",
+    "mega::MegaNode::TYPE_ROOT",
+    "mega::MegaNode::TYPE_INCOMING",
+    "mega::MegaNode::TYPE_RUBBISH"
+};
+
+enum NodeChangeType
+{
+    "mega::MegaNode::CHANGE_TYPE_REMOVED",
+    "mega::MegaNode::CHANGE_TYPE_ATTRIBUTES",
+    "mega::MegaNode::CHANGE_TYPE_OWNER",
+    "mega::MegaNode::CHANGE_TYPE_TIMESTAMP",
+    "mega::MegaNode::CHANGE_TYPE_FILE_ATTRIBUTES",
+    "mega::MegaNode::CHANGE_TYPE_INSHARE",
+    "mega::MegaNode::CHANGE_TYPE_OUTSHARE",
+    "mega::MegaNode::CHANGE_TYPE_PARENT",
+    "mega::MegaNode::CHANGE_TYPE_PENDINGSHARE"
+};
+
 [Prefix="mega::"]
 interface MegaNode
 {
-/*    enum {
-        "TYPE_UNKNOWN",
-        "TYPE_FILE",
-        "TYPE_FOLDER",
-        "TYPE_ROOT",
-        "TYPE_INCOMING",
-        "TYPE_RUBBISH"
-    };*/
-
-/*    enum
-    {
-        "CHANGE_TYPE_REMOVED",
-        "CHANGE_TYPE_ATTRIBUTES",
-        "CHANGE_TYPE_OWNER",
-        "CHANGE_TYPE_TIMESTAMP",
-        "CHANGE_TYPE_FILE_ATTRIBUTES",
-        "CHANGE_TYPE_INSHARE",
-        "CHANGE_TYPE_OUTSHARE",
-        "CHANGE_TYPE_PARENT",
-        "CHANGE_TYPE_PENDINGSHARE"
-    };*/
-
     long getType();
     [Const] DOMString getName();
     boolean hasCustomAttrs();
@@ -93,25 +96,26 @@ interface MegaNode
     boolean isTakenDown();
 };
 
+enum UserVisibility
+{
+    "mega::MegaUser::VISIBILITY_UNKNOWN",
+    "mega::MegaUser::VISIBILITY_HIDDEN",
+    "mega::MegaUser::VISIBILITY_VISIBLE",
+    "mega::MegaUser::VISIBILITY_ME"
+};
+
+enum UserChangeType
+{
+    "mega::MegaUser::CHANGE_TYPE_AUTH",
+    "mega::MegaUser::CHANGE_TYPE_LSTINT",
+    "mega::MegaUser::CHANGE_TYPE_AVATAR",
+    "mega::MegaUser::CHANGE_TYPE_FIRSTNAME",
+    "mega::MegaUser::CHANGE_TYPE_LASTNAME"
+};
+
 [Prefix="mega::"]
 interface MegaUser
 {
-/*    enum {
-        "VISIBILITY_UNKNOWN",
-        "VISIBILITY_HIDDEN",
-        "VISIBILITY_VISIBLE",
-        "VISIBILITY_ME"
-    };*/
-
-/*    enum
-    {
-        "CHANGE_TYPE_AUTH",
-        "CHANGE_TYPE_LSTINT",
-        "CHANGE_TYPE_AVATAR",
-        "CHANGE_TYPE_FIRSTNAME",
-        "CHANGE_TYPE_LASTNAME"
-    };*/
-
     [Const] DOMString getEmail();
     long getVisibility();
     long getTimestamp();
@@ -119,17 +123,18 @@ interface MegaUser
     long getChanges();
 };
 
+enum ShareAccessType
+{
+    "mega::MegaShare::ACCESS_UNKNOWN",
+    "mega::MegaShare::ACCESS_READ",
+    "mega::MegaShare::ACCESS_READWRITE",
+    "mega::MegaShare::ACCESS_FULL",
+    "mega::MegaShare::ACCESS_OWNER"
+};
+
 [Prefix="mega::"]
 interface MegaShare
 {
-/*    enum {
-        "ACCESS_UNKNOWN",
-        "ACCESS_READ",
-        "ACCESS_READWRITE",
-        "ACCESS_FULL",
-        "ACCESS_OWNER"
-    };*/
-
     [Const] DOMString getUser();
     //MegaHandle getNodeHandle();
     long getAccess();
@@ -178,64 +183,65 @@ interface MegaContactRequestList
     long size();
 };
 
+enum RequestType
+{
+    "mega::MegaRequest::TYPE_LOGIN",
+    "mega::MegaRequest::TYPE_CREATE_FOLDER",
+    "mega::MegaRequest::TYPE_MOVE",
+    "mega::MegaRequest::TYPE_COPY",
+    "mega::MegaRequest::TYPE_RENAME",
+    "mega::MegaRequest::TYPE_REMOVE",
+    "mega::MegaRequest::TYPE_SHARE",
+    "mega::MegaRequest::TYPE_IMPORT_LINK",
+    "mega::MegaRequest::TYPE_EXPORT",
+    "mega::MegaRequest::TYPE_FETCH_NODES",
+    "mega::MegaRequest::TYPE_ACCOUNT_DETAILS",
+    "mega::MegaRequest::TYPE_CHANGE_PW",
+    "mega::MegaRequest::TYPE_UPLOAD",
+    "mega::MegaRequest::TYPE_LOGOUT",
+    "mega::MegaRequest::TYPE_GET_PUBLIC_NODE",
+    "mega::MegaRequest::TYPE_GET_ATTR_FILE",
+    "mega::MegaRequest::TYPE_SET_ATTR_FILE",
+    "mega::MegaRequest::TYPE_GET_ATTR_USER",
+    "mega::MegaRequest::TYPE_SET_ATTR_USER",
+    "mega::MegaRequest::TYPE_RETRY_PENDING_CONNECTIONS",
+    "mega::MegaRequest::TYPE_ADD_CONTACT",
+    "mega::MegaRequest::TYPE_REMOVE_CONTACT",
+    "mega::MegaRequest::TYPE_CREATE_ACCOUNT",
+    "mega::MegaRequest::TYPE_CONFIRM_ACCOUNT",
+    "mega::MegaRequest::TYPE_QUERY_SIGNUP_LINK",
+    "mega::MegaRequest::TYPE_ADD_SYNC",
+    "mega::MegaRequest::TYPE_REMOVE_SYNC",
+    "mega::MegaRequest::TYPE_REMOVE_SYNCS",
+    "mega::MegaRequest::TYPE_PAUSE_TRANSFERS",
+    "mega::MegaRequest::TYPE_CANCEL_TRANSFER",
+    "mega::MegaRequest::TYPE_CANCEL_TRANSFERS",
+    "mega::MegaRequest::TYPE_DELETE",
+    "mega::MegaRequest::TYPE_REPORT_EVENT",
+    "mega::MegaRequest::TYPE_CANCEL_ATTR_FILE",
+    "mega::MegaRequest::TYPE_GET_PRICING",
+    "mega::MegaRequest::TYPE_GET_PAYMENT_ID",
+    "mega::MegaRequest::TYPE_GET_USER_DATA",
+    "mega::MegaRequest::TYPE_LOAD_BALANCING",
+    "mega::MegaRequest::TYPE_KILL_SESSION",
+    "mega::MegaRequest::TYPE_SUBMIT_PURCHASE_RECEIPT",
+    "mega::MegaRequest::TYPE_CREDIT_CARD_STORE",
+    "mega::MegaRequest::TYPE_UPGRADE_ACCOUNT",
+    "mega::MegaRequest::TYPE_CREDIT_CARD_QUERY_SUBSCRIPTIONS",
+    "mega::MegaRequest::TYPE_CREDIT_CARD_CANCEL_SUBSCRIPTIONS",
+    "mega::MegaRequest::TYPE_GET_SESSION_TRANSFER_URL",
+    "mega::MegaRequest::TYPE_GET_PAYMENT_METHODS",
+    "mega::MegaRequest::TYPE_INVITE_CONTACT",
+    "mega::MegaRequest::TYPE_REPLY_CONTACT_REQUEST",
+    "mega::MegaRequest::TYPE_SUBMIT_FEEDBACK",
+    "mega::MegaRequest::TYPE_SEND_EVENT",
+    "mega::MegaRequest::TYPE_CLEAN_RUBBISH_BIN",
+    "mega::MegaRequest::TYPE_SET_ATTR_NODE"
+};
+
 [Prefix="mega::"]
 interface MegaRequest
 {
-   /*enum {
-        "TYPE_LOGIN",
-        "TYPE_CREATE_FOLDER",
-        "TYPE_MOVE",
-        "TYPE_COPY",
-        "TYPE_RENAME",
-        "TYPE_REMOVE",
-        "TYPE_SHARE",
-        "TYPE_IMPORT_LINK,
-        "TYPE_EXPORT,
-        "TYPE_FETCH_NODES",
-        "TYPE_ACCOUNT_DETAILS",
-        "TYPE_CHANGE_PW",
-        "TYPE_UPLOAD",
-        "TYPE_LOGOUT",
-        "TYPE_GET_PUBLIC_NODE",
-        "TYPE_GET_ATTR_FILE",
-        "TYPE_SET_ATTR_FILE",
-        "TYPE_GET_ATTR_USER",
-        "TYPE_SET_ATTR_USER",
-        "TYPE_RETRY_PENDING_CONNECTIONS",
-        "TYPE_ADD_CONTACT",
-        "TYPE_REMOVE_CONTACT",
-        "TYPE_CREATE_ACCOUNT",
-        "TYPE_CONFIRM_ACCOUNT",
-        "TYPE_QUERY_SIGNUP_LINK",
-        "TYPE_ADD_SYNC",
-        "TYPE_REMOVE_SYNC",
-        "TYPE_REMOVE_SYNCS",
-        "TYPE_PAUSE_TRANSFERS",
-        "TYPE_CANCEL_TRANSFER",
-        "TYPE_CANCEL_TRANSFERS",
-        "TYPE_DELETE",
-        "TYPE_REPORT_EVENT",
-        "TYPE_CANCEL_ATTR_FILE",
-        "TYPE_GET_PRICING",
-        "TYPE_GET_PAYMENT_ID",
-        "TYPE_GET_USER_DATA",
-        "TYPE_LOAD_BALANCING",
-        "TYPE_KILL_SESSION",
-        "TYPE_SUBMIT_PURCHASE_RECEIPT",
-        "TYPE_CREDIT_CARD_STORE",
-        "TYPE_UPGRADE_ACCOUNT",
-        "TYPE_CREDIT_CARD_QUERY_SUBSCRIPTIONS",
-        "TYPE_CREDIT_CARD_CANCEL_SUBSCRIPTIONS",
-        "TYPE_GET_SESSION_TRANSFER_URL",
-        "TYPE_GET_PAYMENT_METHODS",
-        "TYPE_INVITE_CONTACT",
-        "TYPE_REPLY_CONTACT_REQUEST",
-        "TYPE_SUBMIT_FEEDBACK",
-        "TYPE_SEND_EVENT",
-        "TYPE_CLEAN_RUBBISH_BIN",
-        "TYPE_SET_ATTR_NODE"
-    };*/
-
     long getType();
     [Const] DOMString getRequestString();
     //DOMString toString();
@@ -267,14 +273,15 @@ interface MegaRequest
     long getTag();
 };
 
+enum TransferType
+{
+    "mega::MegaTransfer::TYPE_DOWNLOAD",
+    "mega::MegaTransfer::TYPE_UPLOAD"
+};
+    
 [Prefix="mega::"]
 interface MegaTransfer
 {
-    /*enum {
-        "TYPE_DOWNLOAD",
-        "TYPE_UPLOAD"
-    };*/
-
     long getType();
     [Const] DOMString getTransferString();
     //DOMString toString();
@@ -303,30 +310,33 @@ interface MegaTransfer
     long getFolderTransferTag();
 };
 
+enum ContactRequestState
+{
+    "mega::MegaContactRequest::STATUS_UNRESOLVED",
+    "mega::MegaContactRequest::STATUS_ACCEPTED",
+    "mega::MegaContactRequest::STATUS_DENIED",
+    "mega::MegaContactRequest::STATUS_IGNORED",
+    "mega::MegaContactRequest::STATUS_DELETED",
+    "mega::MegaContactRequest::STATUS_REMINDED"
+};
+
+enum ContactRequestReplyType
+{
+    "mega::MegaContactRequest::REPLY_ACTION_ACCEPT",
+    "mega::MegaContactRequest::REPLY_ACTION_DENY",
+    "mega::MegaContactRequest::REPLY_ACTION_IGNORE"
+};
+
+enum ContactRequestAction
+{
+    "mega::MegaContactRequest::INVITE_ACTION_ADD",
+    "mega::MegaContactRequest::INVITE_ACTION_DELETE",
+    "mega::MegaContactRequest::INVITE_ACTION_REMIND"
+};
+
 [Prefix="mega::"]
 interface MegaContactRequest
 {
-    /*enum {
-        "STATUS_UNRESOLVED",
-        "STATUS_ACCEPTED",
-        "STATUS_DENIED",
-        "STATUS_IGNORED",
-        "STATUS_DELETED",
-        "STATUS_REMINDED"
-    };
-
-    enum {
-        "REPLY_ACTION_ACCEPT",
-        "REPLY_ACTION_DENY",
-        "REPLY_ACTION_IGNORE"
-    };
-
-    enum {
-        "INVITE_ACTION_ADD",
-        "INVITE_ACTION_DELETE",
-        "INVITE_ACTION_REMIND"
-    };*/
-
     //MegaHandle getHandle();
     DOMString getSourceEmail();
     DOMString getSourceMessage();
@@ -337,46 +347,45 @@ interface MegaContactRequest
     boolean isOutgoing();
 };
 
+enum ErrorType
+{
+    "mega::MegaError::API_OK",
+    "mega::MegaError::API_EINTERNAL",
+    "mega::MegaError::API_EARGS",
+    "mega::MegaError::API_EAGAIN",
+    "mega::MegaError::API_ERATELIMIT",
+    "mega::MegaError::API_EFAILED",
+    "mega::MegaError::API_ETOOMANY",
+    "mega::MegaError::API_ERANGE",
+    "mega::MegaError::API_EEXPIRED",
+    "mega::MegaError::API_ENOENT",
+    "mega::MegaError::API_ECIRCULAR",
+    "mega::MegaError::API_EACCESS",
+    "mega::MegaError::API_EEXIST",
+    "mega::MegaError::API_EINCOMPLETE",
+    "mega::MegaError::API_EKEY",
+    "mega::MegaError::API_ESID",
+    "mega::MegaError::API_EBLOCKED",
+    "mega::MegaError::API_EOVERQUOTA",
+    "mega::MegaError::API_ETEMPUNAVAIL",
+    "mega::MegaError::API_ETOOMANYCONNECTIONS",
+    "mega::MegaError::API_EWRITE",
+    "mega::MegaError::API_EREAD",
+    "mega::MegaError::API_EAPPKEY",
+    "mega::MegaError::API_ESSL",
+
+    "mega::MegaError::PAYMENT_ECARD",
+    "mega::MegaError::PAYMENT_EBILLING",
+    "mega::MegaError::PAYMENT_EFRAUD",
+    "mega::MegaError::PAYMENT_ETOOMANY",
+    "mega::MegaError::PAYMENT_EBALANCE",
+    "mega::MegaError::PAYMENT_EGENERIC"
+};
+
 [Prefix="mega::"]
 interface MegaError
 {
-    /*enum
-    {
-        "API_OK",
-        "API_EINTERNAL",
-        "API_EARGS",
-        "API_EAGAIN",
-        "API_ERATELIMIT",
-        "API_EFAILED",
-        "API_ETOOMANY",
-        "API_ERANGE",
-        "API_EEXPIRED",
-        "API_ENOENT",
-        "API_ECIRCULAR",
-        "API_EACCESS",
-        "API_EEXIST",
-        "API_EINCOMPLETE",
-        "API_EKEY",
-        "API_ESID",
-        "API_EBLOCKED",
-        "API_EOVERQUOTA",
-        "API_ETEMPUNAVAIL",
-        "API_ETOOMANYCONNECTIONS",
-        "API_EWRITE",
-        "API_EREAD",
-        "API_EAPPKEY",
-        "API_ESSL",
-
-        "PAYMENT_ECARD",
-        "PAYMENT_EBILLING",
-        "PAYMENT_EFRAUD",
-        "PAYMENT_ETOOMANY",
-        "PAYMENT_EBALANCE",
-        "PAYMENT_EGENERIC"
-    };*/
-
-
-    //MegaError(long errorCode);
+    void MegaError(long errorCode);
     long getErrorCode();
     [Const] DOMString getErrorString();
     //DOMString toString();
@@ -451,58 +460,79 @@ interface MegaInputStreamInterface
 };
 */
 
+/*
+enum int
+{
+    "mega::MegaApi::STATE_NONE",
+    "mega::MegaApi::STATE_SYNCED",
+    "mega::MegaApi::STATE_PENDING",
+    "mega::MegaApi::STATE_SYNCING",
+    "mega::MegaApi::STATE_IGNORED"
+};*/
+
+enum LogLevel
+{
+    "mega::MegaApi::LOG_LEVEL_FATAL",
+    "mega::MegaApi::LOG_LEVEL_ERROR",
+    "mega::MegaApi::LOG_LEVEL_WARNING",
+    "mega::MegaApi::LOG_LEVEL_INFO",
+    "mega::MegaApi::LOG_LEVEL_DEBUG",
+    "mega::MegaApi::LOG_LEVEL_MAX"
+};
+
+enum FileAttrType
+{
+    "mega::MegaApi::ATTR_TYPE_THUMBNAIL",
+    "mega::MegaApi::ATTR_TYPE_PREVIEW"
+};
+
+enum UserAttrType
+{
+    "mega::MegaApi::USER_ATTR_AVATAR",
+    "mega::MegaApi::USER_ATTR_FIRSTNAME",
+    "mega::MegaApi::USER_ATTR_LASTNAME",
+    "mega::MegaApi::USER_ATTR_AUTHRING",
+    "mega::MegaApi::USER_ATTR_LAST_INTERACTION"
+};
+
+enum PaymentMethod
+{
+    "mega::MegaApi::PAYMENT_METHOD_BALANCE",
+    "mega::MegaApi::PAYMENT_METHOD_PAYPAL",
+    "mega::MegaApi::PAYMENT_METHOD_ITUNES",
+    "mega::MegaApi::PAYMENT_METHOD_GOOGLE_WALLET",
+    "mega::MegaApi::PAYMENT_METHOD_BITCOIN",
+    "mega::MegaApi::PAYMENT_METHOD_UNIONPAY",
+    "mega::MegaApi::PAYMENT_METHOD_FORTUMO",
+    "mega::MegaApi::PAYMENT_METHOD_CREDIT_CARD",
+    "mega::MegaApi::PAYMENT_METHOD_CENTILI"
+};
+
+enum TransferMethod
+{
+    "mega::MegaApi::TRANSFER_METHOD_NORMAL",
+    "mega::MegaApi::TRANSFER_METHOD_ALTERNATIVE_PORT",
+    "mega::MegaApi::TRANSFER_METHOD_AUTO"
+};
+
+enum SortOrder
+{
+    "mega::MegaApi::ORDER_NONE",
+    "mega::MegaApi::ORDER_DEFAULT_ASC",
+    "mega::MegaApi::ORDER_DEFAULT_DESC",
+    "mega::MegaApi::ORDER_SIZE_ASC",
+    "mega::MegaApi::ORDER_SIZE_DESC",
+    "mega::MegaApi::ORDER_CREATION_ASC",
+    "mega::MegaApi::ORDER_CREATION_DESC",
+    "mega::MegaApi::ORDER_MODIFICATION_ASC",
+    "mega::MegaApi::ORDER_MODIFICATION_DESC",
+    "mega::MegaApi::ORDER_ALPHABETICAL_ASC",
+    "mega::MegaApi::ORDER_ALPHABETICAL_DESC"
+};
+
 [Prefix="mega::"]
 interface MegaApi
 {
-    /*enum
-    {
-        "STATE_NONE",
-        "STATE_SYNCED",
-        "STATE_PENDING",
-        "STATE_SYNCING",
-        "STATE_IGNORED"
-    };
-
-    enum {
-        "LOG_LEVEL_FATAL",
-        "LOG_LEVEL_ERROR",
-        "LOG_LEVEL_WARNING",
-        "LOG_LEVEL_INFO",
-        "LOG_LEVEL_DEBUG",
-        "LOG_LEVEL_MAX"
-    };
-
-    enum {
-        "ATTR_TYPE_THUMBNAIL",
-        "ATTR_TYPE_PREVIEW"
-    };
-
-    enum {
-        "USER_ATTR_AVATAR",
-        "USER_ATTR_FIRSTNAME",
-        "USER_ATTR_LASTNAME",
-        "USER_ATTR_AUTHRING",
-        "USER_ATTR_LAST_INTERACTION"
-    };
-
-    enum {
-        "PAYMENT_METHOD_BALANCE",
-        "PAYMENT_METHOD_PAYPAL",
-        "PAYMENT_METHOD_ITUNES",
-        "PAYMENT_METHOD_GOOGLE_WALLET",
-        "PAYMENT_METHOD_BITCOIN",
-        "PAYMENT_METHOD_UNIONPAY",
-        "PAYMENT_METHOD_FORTUMO",
-        "PAYMENT_METHOD_CREDIT_CARD",
-        "PAYMENT_METHOD_CENTILI"
-    };
-
-    enum {
-        "TRANSFER_METHOD_NORMAL",
-        "TRANSFER_METHOD_ALTERNATIVE_PORT",
-        "TRANSFER_METHOD_AUTO"
-    };*/
-
     void MegaApi(DOMString appKey, DOMString basePath, DOMString userAgent);
     void MegaApi(DOMString appKey, MegaGfxProcessor processor, DOMString basePath, DOMString userAgent);
     void addListener(MegaListenerInterface listener);
@@ -643,20 +673,6 @@ interface MegaApi
     long getTotalUploadedBytes();
     void updateStats();
 
-    /*enum {
-        "ORDER_NONE",
-        "ORDER_DEFAULT_ASC",
-        "ORDER_DEFAULT_DESC",
-        "ORDER_SIZE_ASC",
-        "ORDER_SIZE_DESC",
-        "ORDER_CREATION_ASC",
-        "ORDER_CREATION_DESC",
-        "ORDER_MODIFICATION_ASC",
-        "ORDER_MODIFICATION_DESC",
-        "ORDER_ALPHABETICAL_ASC",
-        "ORDER_ALPHABETICAL_DESC"
-    };*/
-
     long getNumChildren(MegaNode parent);
     long getNumChildFiles(MegaNode parent);
     long getNumChildFolders(MegaNode parent);
@@ -768,25 +784,25 @@ interface MegaAccountTransaction
     double getAmount();
 };
 
+enum AccountType
+{
+    "mega::MegaAccountDetails::ACCOUNT_TYPE_FREE",
+    "mega::MegaAccountDetails::ACCOUNT_TYPE_PROI",
+    "mega::MegaAccountDetails::ACCOUNT_TYPE_PROII",
+    "mega::MegaAccountDetails::ACCOUNT_TYPE_PROIII",
+    "mega::MegaAccountDetails::ACCOUNT_TYPE_LITE"
+};
+
+enum SubscriptionStatus
+{
+    "mega::MegaAccountDetails::SUBSCRIPTION_STATUS_NONE",
+    "mega::MegaAccountDetails::SUBSCRIPTION_STATUS_VALID",
+    "mega::MegaAccountDetails::SUBSCRIPTION_STATUS_INVALID"
+};
+
 [Prefix="mega::"]
 interface MegaAccountDetails
 {
-    /*enum
-    {
-        "ACCOUNT_TYPE_FREE",
-        "ACCOUNT_TYPE_PROI",
-        "ACCOUNT_TYPE_PROII",
-        "ACCOUNT_TYPE_PROIII",
-        "ACCOUNT_TYPE_LITE"
-    };
-
-    enum
-    {
-        "SUBSCRIPTION_STATUS_NONE",
-        "SUBSCRIPTION_STATUS_VALID",
-        "SUBSCRIPTION_STATUS_INVALID"
-    };*/
-
     long getProLevel();
     long getProExpiration();
     long getSubscriptionStatus();
