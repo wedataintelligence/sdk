@@ -28,9 +28,10 @@ interface MegaProxy
     [Const] DOMString getPassword();
 };
 
-[Prefix="mega::"]
-interface MegaLogger
+[JSImplementation="mega::MegaLogger"]
+interface MegaLoggerInterface
 {
+    void MegaLoggerInterface();
     void log(DOMString time, long loglevel, DOMString source, DOMString message);
 };
 
@@ -258,7 +259,7 @@ interface MegaRequest
     boolean getFlag();
     long getTransferredBytes();
     long getTotalBytes();
-    MegaRequestListener getListener();
+    //MegaRequestListener getListener();
     MegaAccountDetails getMegaAccountDetails();
     MegaPricing getPricing();
     long getTransferTag();
@@ -287,7 +288,7 @@ interface MegaTransfer
     long getStartPos();
     long getEndPos();
     [Const] DOMString getFileName();
-    MegaTransferListener getListener();
+    //MegaTransferListener getListener();
     long getNumRetry();
     long getMaxRetries();
     long getTag();
@@ -382,24 +383,27 @@ interface MegaError
     //static DOMString getErrorString(long errorCode);
 };
 
-[Prefix="mega::"]
-interface MegaTreeProcessor
+[JSImplementation="mega::MegaTreeProcessor"]
+interface MegaTreeProcessorInterface
 {
+    void MegaTreeProcessorInterface();
     boolean processMegaNode(MegaNode node);
 };
 
-[Prefix="mega::"]
-interface MegaRequestListener
+[JSImplementation="mega::MegaRequestListener"]
+interface MegaRequestListenerInterface
 {
+    void MegaRequestListenerInterface();
     void onRequestStart(MegaApi api, MegaRequest request);
     void onRequestFinish(MegaApi api, MegaRequest request, MegaError e);
     void onRequestUpdate(MegaApi api, MegaRequest request);
     void onRequestTemporaryError(MegaApi api, MegaRequest request, MegaError error);
 };
 
-[Prefix="mega::"]
-interface MegaTransferListener
+[JSImplementation="mega::MegaTransferListener"]
+interface MegaTransferListenerInterface
 {
+    void MegaTransferListenerInterface();
     void onTransferStart(MegaApi api, MegaTransfer transfer);
     void onTransferFinish(MegaApi api, MegaTransfer transfer, MegaError error);
     void onTransferUpdate(MegaApi api, MegaTransfer transfer);
@@ -407,9 +411,10 @@ interface MegaTransferListener
     boolean onTransferData(MegaApi api, MegaTransfer transfer, DOMString buffer, long size);
 };
 
-[Prefix="mega::"]
-interface MegaGlobalListener
+[JSImplementation="mega::MegaGlobalListener"]
+interface MegaGlobalListenerInterface
 {
+    void MegaGlobalListenerInterface();
     void onUsersUpdate(MegaApi api, MegaUserList users);
     void onNodesUpdate(MegaApi api, MegaNodeList nodes);
     void onAccountUpdate(MegaApi api);
@@ -436,12 +441,15 @@ interface MegaListenerInterface
     void onReloadNeeded(MegaApi api);
 };
 
-[Prefix="mega::"]
-interface MegaInputStream
+/*
+[JSImplementation="mega::MegaInputStream"]
+interface MegaInputStreamInterface
 {
+    void MegaInputStreamInterface();
     long getSize();
     boolean read(DOMString buffer, long size);
 };
+*/
 
 [Prefix="mega::"]
 interface MegaApi
@@ -498,13 +506,13 @@ interface MegaApi
     void MegaApi(DOMString appKey, DOMString basePath, DOMString userAgent);
     void MegaApi(DOMString appKey, MegaGfxProcessor processor, DOMString basePath, DOMString userAgent);
     void addListener(MegaListenerInterface listener);
-    void addRequestListener(MegaRequestListener listener);
-    void addTransferListener(MegaTransferListener listener);
-    void addGlobalListener(MegaGlobalListener listener);
+    void addRequestListener(MegaRequestListenerInterface listener);
+    void addTransferListener(MegaTransferListenerInterface listener);
+    void addGlobalListener(MegaGlobalListenerInterface listener);
     void removeListener(MegaListenerInterface listener);
-    void removeRequestListener(MegaRequestListener listener);
-    void removeTransferListener(MegaTransferListener listener);
-    void removeGlobalListener(MegaGlobalListener listener);
+    void removeRequestListener(MegaRequestListenerInterface listener);
+    void removeTransferListener(MegaTransferListenerInterface listener);
+    void removeGlobalListener(MegaGlobalListenerInterface listener);
     MegaRequest getCurrentRequest();
     MegaTransfer getCurrentTransfer();
     MegaError getCurrentError();
@@ -512,107 +520,107 @@ interface MegaApi
     MegaUserList getCurrentUsers();
     DOMString getBase64PwKey(DOMString password);
     DOMString getStringHash(DOMString base64pwkey, DOMString email);
-    void getSessionTransferURL(DOMString path, MegaRequestListener listener);
+    void getSessionTransferURL(DOMString path, MegaRequestListenerInterface listener);
     //static MegaHandle base32ToHandle(DOMString base32Handle);
     //static MegaHandle base64ToHandle(DOMString base64Handle);
     //static DOMString handleToBase64(MegaHandle handle);
     //static DOMString userHandleToBase64(MegaHandle handle);
     static void addEntropy(DOMString data, unsigned long size);
-    void retryPendingConnections(boolean disconnect, boolean includexfers, MegaRequestListener listener);
-    void login(DOMString email, DOMString password, MegaRequestListener listener);
-    void loginToFolder(DOMString megaFolderLink, MegaRequestListener listener);
-    void fastLogin(DOMString email, DOMString stringHash, DOMString base64pwkey, MegaRequestListener listener);
-    void fastLogin(DOMString session, MegaRequestListener listener);
-    //void killSession(MegaHandle sessionHandle, MegaRequestListener listener);
-    void getUserData(MegaRequestListener listener);
-    void getUserData(MegaUser user, MegaRequestListener listener);
-    //void getUserData(DOMString user, MegaRequestListener listener);
+    void retryPendingConnections(boolean disconnect, boolean includexfers, MegaRequestListenerInterface listener);
+    void login(DOMString email, DOMString password, MegaRequestListenerInterface listener);
+    void loginToFolder(DOMString megaFolderLink, MegaRequestListenerInterface listener);
+    void fastLogin(DOMString email, DOMString stringHash, DOMString base64pwkey, MegaRequestListenerInterface listener);
+    void fastLogin(DOMString session, MegaRequestListenerInterface listener);
+    //void killSession(MegaHandle sessionHandle, MegaRequestListenerInterface listener);
+    void getUserData(MegaRequestListenerInterface listener);
+    void getUserData(MegaUser user, MegaRequestListenerInterface listener);
+    //void getUserData(DOMString user, MegaRequestListenerInterface listener);
     DOMString dumpSession();
     DOMString dumpXMPPSession();
-    void createAccount(DOMString email, DOMString password, DOMString name, MegaRequestListener listener);
-    void fastCreateAccount(DOMString email, DOMString base64pwkey, DOMString name, MegaRequestListener listener);
-    void querySignupLink(DOMString link, MegaRequestListener listener);
-    void confirmAccount(DOMString link, DOMString password, MegaRequestListener listener);
-    void fastConfirmAccount(DOMString link, DOMString base64pwkey, MegaRequestListener listener);
+    void createAccount(DOMString email, DOMString password, DOMString name, MegaRequestListenerInterface listener);
+    void fastCreateAccount(DOMString email, DOMString base64pwkey, DOMString name, MegaRequestListenerInterface listener);
+    void querySignupLink(DOMString link, MegaRequestListenerInterface listener);
+    void confirmAccount(DOMString link, DOMString password, MegaRequestListenerInterface listener);
+    void fastConfirmAccount(DOMString link, DOMString base64pwkey, MegaRequestListenerInterface listener);
     void setProxySettings(MegaProxy proxySettings);
     MegaProxy getAutoProxySettings();
     long isLoggedIn();
     DOMString getMyEmail();
     DOMString getMyUserHandle();
     static void setLogLevel(long logLevel);
-    static void setLoggerObject(MegaLogger megaLogger);
+    static void setLoggerObject(MegaLoggerInterface megaLogger);
     static void log(long logLevel, DOMString message, DOMString filename, long line);
-    void createFolder(DOMString name, MegaNode parent, MegaRequestListener listener);
-    void moveNode(MegaNode node, MegaNode newParent, MegaRequestListener listener);
-    void copyNode(MegaNode node, MegaNode newParent, MegaRequestListener listener);
-    void copyNode(MegaNode node, MegaNode newParent, DOMString newName, MegaRequestListener listener);
-    void renameNode(MegaNode node, DOMString newName, MegaRequestListener listener);
-    void remove(MegaNode node, MegaRequestListener listener);
-    void cleanRubbishBin(MegaRequestListener listener);
-    //void sendFileToUser(MegaNode node, MegaUser user, MegaRequestListener listener);
-    void sendFileToUser(MegaNode node, DOMString email, MegaRequestListener listener);
-    //void share(MegaNode node, MegaUser user, long level, MegaRequestListener listener);
-    void share(MegaNode node, DOMString email, long level, MegaRequestListener listener);
-    void importFileLink(DOMString megaFileLink, MegaNode parent, MegaRequestListener listener);
-    void getPublicNode(DOMString megaFileLink, MegaRequestListener listener);
-    void getThumbnail(MegaNode node, DOMString dstFilePath, MegaRequestListener listener);
-    void getPreview(MegaNode node, DOMString dstFilePath, MegaRequestListener listener);
-    void getUserAvatar(MegaUser user, DOMString dstFilePath, MegaRequestListener listener);
-    //void getUserAvatar(DOMString dstFilePath, MegaRequestListener listener);
-    void getUserAttribute(MegaUser user, long type, MegaRequestListener listener);
-    void getUserAttribute(long type, MegaRequestListener listener);
-    void cancelGetThumbnail(MegaNode node, MegaRequestListener listener);
-    void cancelGetPreview(MegaNode node, MegaRequestListener listener);
-    void setThumbnail(MegaNode node, DOMString srcFilePath, MegaRequestListener listener);
-    void setPreview(MegaNode node, DOMString srcFilePath, MegaRequestListener listener);
-    void setAvatar(DOMString srcFilePath, MegaRequestListener listener);
-    void setUserAttribute(long type, DOMString value, MegaRequestListener listener);
-    void setCustomNodeAttribute(MegaNode node, DOMString attrName, DOMString value,  MegaRequestListener listener);
-    void exportNode(MegaNode node, MegaRequestListener listener);
-    void exportNode(MegaNode node, long expireTime, MegaRequestListener listener);
-    void disableExport(MegaNode node, MegaRequestListener listener);
-    void fetchNodes(MegaRequestListener listener);
-    void getAccountDetails(MegaRequestListener listener);
-    void getExtendedAccountDetails(boolean sessions, boolean purchases, boolean transactions, MegaRequestListener listener);
-    void getPricing(MegaRequestListener listener);
-    //void getPaymentId(MegaHandle productHandle, MegaRequestListener listener);
-    //void upgradeAccount(MegaHandle productHandle, long paymentMethod, MegaRequestListener listener);
-    void submitPurchaseReceipt(DOMString receipt, MegaRequestListener listener);
-    void submitPurchaseReceipt(long gateway, DOMString receipt, MegaRequestListener listener);
+    void createFolder(DOMString name, MegaNode parent, MegaRequestListenerInterface listener);
+    void moveNode(MegaNode node, MegaNode newParent, MegaRequestListenerInterface listener);
+    void copyNode(MegaNode node, MegaNode newParent, MegaRequestListenerInterface listener);
+    void copyNode(MegaNode node, MegaNode newParent, DOMString newName, MegaRequestListenerInterface listener);
+    void renameNode(MegaNode node, DOMString newName, MegaRequestListenerInterface listener);
+    void remove(MegaNode node, MegaRequestListenerInterface listener);
+    void cleanRubbishBin(MegaRequestListenerInterface listener);
+    //void sendFileToUser(MegaNode node, MegaUser user, MegaRequestListenerInterface listener);
+    void sendFileToUser(MegaNode node, DOMString email, MegaRequestListenerInterface listener);
+    //void share(MegaNode node, MegaUser user, long level, MegaRequestListenerInterface listener);
+    void share(MegaNode node, DOMString email, long level, MegaRequestListenerInterface listener);
+    void importFileLink(DOMString megaFileLink, MegaNode parent, MegaRequestListenerInterface listener);
+    void getPublicNode(DOMString megaFileLink, MegaRequestListenerInterface listener);
+    void getThumbnail(MegaNode node, DOMString dstFilePath, MegaRequestListenerInterface listener);
+    void getPreview(MegaNode node, DOMString dstFilePath, MegaRequestListenerInterface listener);
+    void getUserAvatar(MegaUser user, DOMString dstFilePath, MegaRequestListenerInterface listener);
+    //void getUserAvatar(DOMString dstFilePath, MegaRequestListenerInterface listener);
+    void getUserAttribute(MegaUser user, long type, MegaRequestListenerInterface listener);
+    void getUserAttribute(long type, MegaRequestListenerInterface listener);
+    void cancelGetThumbnail(MegaNode node, MegaRequestListenerInterface listener);
+    void cancelGetPreview(MegaNode node, MegaRequestListenerInterface listener);
+    void setThumbnail(MegaNode node, DOMString srcFilePath, MegaRequestListenerInterface listener);
+    void setPreview(MegaNode node, DOMString srcFilePath, MegaRequestListenerInterface listener);
+    void setAvatar(DOMString srcFilePath, MegaRequestListenerInterface listener);
+    void setUserAttribute(long type, DOMString value, MegaRequestListenerInterface listener);
+    void setCustomNodeAttribute(MegaNode node, DOMString attrName, DOMString value,  MegaRequestListenerInterface listener);
+    void exportNode(MegaNode node, MegaRequestListenerInterface listener);
+    void exportNode(MegaNode node, long expireTime, MegaRequestListenerInterface listener);
+    void disableExport(MegaNode node, MegaRequestListenerInterface listener);
+    void fetchNodes(MegaRequestListenerInterface listener);
+    void getAccountDetails(MegaRequestListenerInterface listener);
+    void getExtendedAccountDetails(boolean sessions, boolean purchases, boolean transactions, MegaRequestListenerInterface listener);
+    void getPricing(MegaRequestListenerInterface listener);
+    //void getPaymentId(MegaHandle productHandle, MegaRequestListenerInterface listener);
+    //void upgradeAccount(MegaHandle productHandle, long paymentMethod, MegaRequestListenerInterface listener);
+    void submitPurchaseReceipt(DOMString receipt, MegaRequestListenerInterface listener);
+    void submitPurchaseReceipt(long gateway, DOMString receipt, MegaRequestListenerInterface listener);
     void creditCardStore(DOMString address1, DOMString address2, DOMString city,
                          DOMString province, DOMString country, DOMString postalcode,
                          DOMString firstname, DOMString lastname, DOMString creditcard,
                          DOMString expire_month, DOMString expire_year, DOMString cv2,
-                         MegaRequestListener listener);
+                         MegaRequestListenerInterface listener);
 
 
-    void creditCardQuerySubscriptions(MegaRequestListener listener);
-    void creditCardCancelSubscriptions(DOMString reason, MegaRequestListener listener);
-    void getPaymentMethods(MegaRequestListener listener);
+    void creditCardQuerySubscriptions(MegaRequestListenerInterface listener);
+    void creditCardCancelSubscriptions(DOMString reason, MegaRequestListenerInterface listener);
+    void getPaymentMethods(MegaRequestListenerInterface listener);
     DOMString exportMasterKey();
-    void changePassword(DOMString oldPassword, DOMString newPassword, MegaRequestListener listener);
-    void addContact(DOMString email, MegaRequestListener listener);
-    void inviteContact(DOMString email, DOMString message, long action, MegaRequestListener listener);
-    void replyContactRequest(MegaContactRequest request, long action, MegaRequestListener listener);
-    void removeContact(MegaUser user, MegaRequestListener listener);
-    void logout(MegaRequestListener listener);
-    void localLogout(MegaRequestListener listener);
-    void submitFeedback(long rating, DOMString comment, MegaRequestListener listener);
-    void sendEvent(long eventType, DOMString message, MegaRequestListener listener);
-    void reportDebugEvent(DOMString text, MegaRequestListener listener);
+    void changePassword(DOMString oldPassword, DOMString newPassword, MegaRequestListenerInterface listener);
+    void addContact(DOMString email, MegaRequestListenerInterface listener);
+    void inviteContact(DOMString email, DOMString message, long action, MegaRequestListenerInterface listener);
+    void replyContactRequest(MegaContactRequest request, long action, MegaRequestListenerInterface listener);
+    void removeContact(MegaUser user, MegaRequestListenerInterface listener);
+    void logout(MegaRequestListenerInterface listener);
+    void localLogout(MegaRequestListenerInterface listener);
+    void submitFeedback(long rating, DOMString comment, MegaRequestListenerInterface listener);
+    void sendEvent(long eventType, DOMString message, MegaRequestListenerInterface listener);
+    void reportDebugEvent(DOMString text, MegaRequestListenerInterface listener);
 
     ///////////////////   TRANSFERS ///////////////////
-    void startUpload(DOMString localPath, MegaNode parent, MegaTransferListener listener);
-    //void startUpload(DOMString localPath, MegaNode parent, long mtime, MegaTransferListener listener);
-    void startUpload(DOMString localPath, MegaNode parent, DOMString fileName, MegaTransferListener listener);
-    void startUpload(DOMString localPath, MegaNode parent, DOMString fileName, long mtime, MegaTransferListener listener);
-    void startDownload(MegaNode node, DOMString localPath, MegaTransferListener listener);
-    void startStreaming(MegaNode node, long startPos, long size, MegaTransferListener listener);
-    void cancelTransfer(MegaTransfer transfer, MegaRequestListener listener);
-    void cancelTransferByTag(long transferTag, MegaRequestListener listener);
-    void cancelTransfers(long type, MegaRequestListener listener);
-    void pauseTransfers(boolean pause, MegaRequestListener listener);
-    void pauseTransfers(boolean pause, long direction, MegaRequestListener listener);
+    void startUpload(DOMString localPath, MegaNode parent, MegaTransferListenerInterface listener);
+    //void startUpload(DOMString localPath, MegaNode parent, long mtime, MegaTransferListenerInterface listener);
+    void startUpload(DOMString localPath, MegaNode parent, DOMString fileName, MegaTransferListenerInterface listener);
+    void startUpload(DOMString localPath, MegaNode parent, DOMString fileName, long mtime, MegaTransferListenerInterface listener);
+    void startDownload(MegaNode node, DOMString localPath, MegaTransferListenerInterface listener);
+    void startStreaming(MegaNode node, long startPos, long size, MegaTransferListenerInterface listener);
+    void cancelTransfer(MegaTransfer transfer, MegaRequestListenerInterface listener);
+    void cancelTransferByTag(long transferTag, MegaRequestListenerInterface listener);
+    void cancelTransfers(long type, MegaRequestListenerInterface listener);
+    void pauseTransfers(boolean pause, MegaRequestListenerInterface listener);
+    void pauseTransfers(boolean pause, long direction, MegaRequestListenerInterface listener);
     boolean areTransfersPaused(long direction);
     void setUploadLimit(long bpslimit);
     void setDownloadMethod(long method);
@@ -679,7 +687,7 @@ interface MegaApi
     long getSize(MegaNode node);
     //DOMString getFingerprint(DOMString filePath);
     DOMString getFingerprint(MegaNode node);
-    DOMString getFingerprint(MegaInputStream inputStream, long mtime);
+    //DOMString getFingerprint(MegaInputStreamInterface inputStream, long mtime);
     MegaNode getNodeByFingerprint(DOMString fingerprint);
     MegaNode getNodeByFingerprint(DOMString fingerprint, MegaNode parent);
     boolean hasFingerprint(DOMString fingerprint);
@@ -693,7 +701,7 @@ interface MegaApi
     MegaNode getInboxNode();
     MegaNode getRubbishNode();
     MegaNodeList search(MegaNode node, DOMString searchString, boolean recursive);
-    boolean processMegaTree(MegaNode node, MegaTreeProcessor processor, boolean recursive);
+    boolean processMegaTree(MegaNode node, MegaTreeProcessorInterface processor, boolean recursive);
     //MegaNode createPublicFileNode(MegaHandle handle, DOMString key, DOMString name,
     //                               long size, long mtime, MegaHandle parentHandle, DOMString auth);
     //MegaNode createPublicFolderNode(MegaHandle handle, DOMString name, MegaHandle parentHandle, DOMString auth);
@@ -706,7 +714,7 @@ interface MegaApi
     boolean createPreview(DOMString imagePath, DOMString dstPath);
     static DOMString base64ToBase32(DOMString base64);
     static DOMString base32ToBase64(DOMString base32);
-    void loadBalancing(DOMString service, MegaRequestListener listener);
+    void loadBalancing(DOMString service, MegaRequestListenerInterface listener);
     static DOMString strdup(DOMString buffer);
     static void removeRecursively(DOMString path);
     boolean isOnline();
