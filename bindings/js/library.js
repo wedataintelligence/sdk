@@ -1,9 +1,9 @@
 
 mergeInto(LibraryManager.library, {
     jsnet_init : function() {
-		this._xhrStack =  [];
-		this._useragent = null;
-	},
+        this._xhrStack =  [];
+        this._useragent = null;
+    },
     jsnet_setuseragent: function(ua) {
         this._useragent = Module.Pointer_stringify(ua);
     },
@@ -25,24 +25,23 @@ mergeInto(LibraryManager.library, {
         }
 
         if (ctx < 0) {
-            var xhr = typeof window === 'undefined' ? require("xhr2") : XMLHttpRequest;
-            ctx = this._xhrStack.push(new xhr) - 1;
+            ctx = this._xhrStack.push(new XMLHttpRequest) - 1;
         }
 
         try {
             var xhr = this._xhrStack[ctx];
 
             if (!this.cxxnet_progress) {
-				this.cxxnet_progress = Module.cwrap('jsnet_progress', 'number', ['number', 'number']);
-				this.cxxnet_onloadend = Module.cwrap('jsnet_onloadend', 'number', ['number', 'number', 'string', 'number']);
-			}
+                this.cxxnet_progress = Module.cwrap('jsnet_progress', 'number', ['number', 'number']);
+                this.cxxnet_onloadend = Module.cwrap('jsnet_onloadend', 'number', ['number', 'number', 'string', 'number']);
+            }
 
             xhr.onloadend = function(ev) {
                 var data = 0, len = 0;
                 if (this.status === 200) {
-					var u8 = new Uint8Array(this.response);
-					data = String.fromCharCode.apply(null, u8);
-					len = data.length;
+                    var u8 = new Uint8Array(this.response);
+                    data = String.fromCharCode.apply(null, u8);
+                    len = data.length;
                 }
                 cxxnet_onloadend(ctx, this.status, data, len);
                 if (data) {

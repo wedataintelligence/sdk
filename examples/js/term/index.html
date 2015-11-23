@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en-us">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.4/jquery.min.js"></script>
+    <script src="http://terminal.jcubic.pl/js/jquery.mousewheel-min.js"></script>
+    <script src="http://terminal.jcubic.pl/js/jquery.terminal-min.js"></script>
+    <link href="http://fonts.googleapis.com/css?family=Droid+Sans+Mono" rel="stylesheet" type="text/css"/>
+    <link href="http://terminal.jcubic.pl/css/jquery.terminal.css" rel="stylesheet"/>
+    <script src="term.js" defer></script>
+    <title>MEGASDK TERMINAL DEMO</title>
+    <style>
+      body {
+        color: #aaa;
+        background-color: #000;
+        font-family: "Droid Sans Mono", "Courier New", monospace !important;
+        margin: 0;
+        padding: none;
+      }
+      #femsg {
+        display:none;
+        position:absolute;
+        top:0;
+        right:0;
+        padding:4px;
+        width:480px;
+        color: #f00;
+        z-index: 2;
+		opacity: 0.8;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="femsg"></div>
+    <div id="terminal" class="terminal"><strong>Loading, please wait...</strong></div>
+
+    <script type='text/javascript'>
+      var global = this;
+
+      var MEGASDK = {
+        printErr: function() {
+            console.error.apply(console, arguments);
+        },
+        setStatus: function(text) {
+          $('#femsg').text(text).show()
+        },
+        totalDependencies: 0,
+        monitorRunDependencies: function(left) {
+          this.totalDependencies = Math.max(this.totalDependencies, left);
+          MEGASDK.setStatus(left ? 'Preparing... (' + (this.totalDependencies-left) + '/' + this.totalDependencies + ')' : 'All downloads complete.');
+        },
+        onRuntimeInitialized: function() {
+            if (!global.XMLHttpRequest) {
+                global.XMLHttpRequest = require("xhr2");
+            }
+            var client = new MegaApi('GdcVBRRY', '', 'JSSDK Example');
+            console.debug('onRuntimeInitialized', client);
+            window.api = client;
+            MEGASDK.Terminal(client);
+        }
+      };
+      window.onerror = function(event) {
+        MEGASDK.setStatus('Exception thrown, see JavaScript console');
+        localStorage.clear();
+        MEGASDK.setStatus = function(text) {
+          if (text) MEGASDK.printErr('[post-exception status] ' + text);
+        };
+      };
+
+        window.onload = function megasdk_loader() {
+            var rootPath = './';
+
+            var xhr = MEGASDK.memoryInitializerRequest = new XMLHttpRequest();
+            xhr.open('GET', rootPath + 'test.js.mem', true);
+            xhr.responseType = 'arraybuffer';
+            xhr.send(null);
+
+            var script = document.createElement('script');
+            script.src = rootPath + 'test.js';
+            document.body.appendChild(script);
+        };
+    </script>
+  </body>
+</html>
