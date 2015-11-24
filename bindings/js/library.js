@@ -33,15 +33,17 @@ mergeInto(LibraryManager.library, {
 
             if (!Module.cxxnet_progress) {
                 Module.cxxnet_progress = Module.cwrap('jsnet_progress', 'number', ['number', 'number']);
-                Module.cxxnet_onloadend = Module.cwrap('jsnet_onloadend', 'number', ['number', 'number', 'string', 'number']);
+                Module.cxxnet_onloadend = Module.cwrap('jsnet_onloadend', 'number', ['number', 'number', 'number', 'number']);
             }
 
             xhr.onloadend = function(ev) {
                 var data = 0, len = 0;
                 if (this.status === 200) {
-                    var u8 = new Uint8Array(this.response);
-                    data = String.fromCharCode.apply(null, u8);
-                    len = data.length;
+                    var u8 = new Uint8Array(this.response || []);
+                    len = u8.length;
+                    if ((data = Module._malloc(len))) {
+                        Module.HEAPU8.set(u8, data);
+                    }
                 }
                 Module.cxxnet_onloadend(ctx, this.status, data, len);
                 if (data) {
