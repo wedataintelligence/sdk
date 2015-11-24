@@ -27,7 +27,7 @@
         width:480px;
         color: #f00;
         z-index: 2;
-		opacity: 0.8;
+        opacity: 0.8;
       }
     </style>
   </head>
@@ -54,7 +54,7 @@
             if (!global.XMLHttpRequest) {
                 global.XMLHttpRequest = require("xhr2");
             }
-            var client = new MegaApi('GdcVBRRY', '', 'JSSDK Example');
+            var client = new this.MegaApi('GdcVBRRY', '', 'JSSDK Example');
             console.debug('onRuntimeInitialized', client);
             window.api = client;
             MEGASDK.Terminal(client);

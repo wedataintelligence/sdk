@@ -1,6 +1,6 @@
 function MegaTerminalListener(aClient, aTerm, aCallback) {
     var self = this;
-    var listener = new MegaListenerInterface();
+    var listener = new MEGASDK.MegaListenerInterface();
     listener.onRequestStart = function(api, request) {
         console.debug('onRequestStart', arguments, request.getRequestString());
     };

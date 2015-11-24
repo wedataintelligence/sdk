@@ -1,39 +1,39 @@
 
 mergeInto(LibraryManager.library, {
     jsnet_init : function() {
-        this._xhrStack =  [];
-        this._useragent = null;
+        Module._xhrStack =  [];
+        Module._useragent = null;
     },
     jsnet_setuseragent: function(ua) {
-        this._useragent = Module.Pointer_stringify(ua);
+        Module._useragent = Module.Pointer_stringify(ua);
     },
     jsnet_getuseragent: function() {
-        return allocate(intArrayFromString(this._useragent || ''), 'i8', ALLOC_STACK);
+        return allocate(intArrayFromString(Module._useragent || ''), 'i8', ALLOC_STACK);
     },
     jsnet_cancel: function(ctx) {
-        this._xhrStack[ctx].abort();
+        Module._xhrStack[ctx].abort();
     },
     jsnet_post: function(url, data) {
         url = Module.Pointer_stringify(url);
         data = Module.Pointer_stringify(data);
 
-        var ctx = this._xhrStack.length;
+        var ctx = Module._xhrStack.length;
         while (ctx--) {
-            if (this._xhrStack[ctx].readyState === 4) {
+            if (Module._xhrStack[ctx].readyState === 4) {
                 break;
             }
         }
 
         if (ctx < 0) {
-            ctx = this._xhrStack.push(new XMLHttpRequest) - 1;
+            ctx = Module._xhrStack.push(new XMLHttpRequest) - 1;
         }
 
         try {
-            var xhr = this._xhrStack[ctx];
+            var xhr = Module._xhrStack[ctx];
 
-            if (!this.cxxnet_progress) {
-                this.cxxnet_progress = Module.cwrap('jsnet_progress', 'number', ['number', 'number']);
-                this.cxxnet_onloadend = Module.cwrap('jsnet_onloadend', 'number', ['number', 'number', 'string', 'number']);
+            if (!Module.cxxnet_progress) {
+                Module.cxxnet_progress = Module.cwrap('jsnet_progress', 'number', ['number', 'number']);
+                Module.cxxnet_onloadend = Module.cwrap('jsnet_onloadend', 'number', ['number', 'number', 'string', 'number']);
             }
 
             xhr.onloadend = function(ev) {
@@ -43,7 +43,7 @@ mergeInto(LibraryManager.library, {
                     data = String.fromCharCode.apply(null, u8);
                     len = data.length;
                 }
-                cxxnet_onloadend(ctx, this.status, data, len);
+                Module.cxxnet_onloadend(ctx, this.status, data, len);
                 if (data) {
                     Module._free(data);
                 }
@@ -51,14 +51,14 @@ mergeInto(LibraryManager.library, {
 
             xhr.upload.onprogress =
             xhr.onprogress = function(ev) {
-                cxxnet_progress(ctx, ev.loaded);
+                Module.cxxnet_progress(ctx, ev.loaded);
             };
 
             xhr.open('POST', url);
             xhr.responseType = 'arraybuffer';
 
-            /*if (this._useragent) {
-                xhr.setRequestHeader('User-Agent', this._useragent, false);
+            /*if (Module._useragent) {
+                xhr.setRequestHeader('User-Agent', Module._useragent, false);
             }*/
 
             xhr.send(data);
