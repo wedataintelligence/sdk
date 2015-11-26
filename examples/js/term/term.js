@@ -53,6 +53,13 @@ function MegaTerminalListener(aClient, aTerm, aCallback) {
         aTerm = term;
         aCallback = cb;
     };
+
+    this.pause = function() {
+        aClient.removeListener(listener);
+    };
+    this.resume = function() {
+        aClient.addListener(listener);
+    };
 }
 
 var accesslevels = [ "read-only", "read/write", "full access" ];
@@ -100,17 +107,11 @@ function dumptree(api, term, n, recurse, depth)
                 // if(n->outshares)
                 if (n.isOutShare())
                 {
-                    var shares = api.getOutShares(n);
-                    for (var len = shares.size(), i = 0; i < len ; i++ )
-                    {
-                        var share = shares.get(i);
-
-                        // if (it->first)
-                        {
-                            line += ", shared with " + share.getUser() + ", access "
-                                + accesslevels[share.getAccess()];
-                        }
-                    }
+                    MEGASDK.getMegaList(api.getOutShares(n))
+                        .forEach(function(share) {
+                            line += ", shared with " + share.getUser()
+                                + ", access " + accesslevels[share.getAccess()];
+                        });
 
                     if (n.isExported())
                     {
@@ -160,12 +161,12 @@ function dumptree(api, term, n, recurse, depth)
 
     if (n.isFolder())
     {
-        var c = api.getChildren(n, MEGASDK.MegaApi.ORDER_ALPHABETICAL_DESC);
+        var nodes = api.getChildren(n, MEGASDK.MegaApi.ORDER_ALPHABETICAL_DESC);
 
-        for (var len = c.size(), i = 0; i < len ; i++ )
-        {
-            dumptree(api, term, c.get(i), recurse, depth + 1);
-        }
+        MEGASDK.getMegaList(nodes)
+            .forEach(function(node) {
+                dumptree(api, term, node, recurse, depth + 1);
+            });
     }
 }
 
@@ -442,6 +443,141 @@ MEGASDK.Terminal = function (client) {
                 listener.abort(null, MEGASDK.MegaError.API_OK);
             }
         }
+        else if (cmd === 'share') {
+            if (!argv.length) {
+                // list all shares (incoming and outgoing)
+
+                term.echo("Shared folders:");
+
+                MEGASDK.getMegaList(client.getOutShares())
+                    .forEach(function(share) {
+                        // XXX: getNodeHandle is missing
+                        // var node = share.getNodeHandle();
+                        // var name = node.getName();
+                        var name = '???';
+                        var line = '    ' + name + ', shared ';
+
+                        // TODO: as exported etc
+                        if (!share.getUser() /*node.isExported()*/) {
+                            line += 'as exported link';
+                        }
+                        else {
+                            line += 'with ' + share.getUser() + ' (' + accesslevels[share.getAccess()] + ')';
+                        }
+
+                        line += ', on ' + new Date(share.getTimestamp() * 1000).toISOString();
+
+                        term.echo(line);
+                    });
+
+                // XXX: getInSharesList returns nothing (!?)
+                // MEGASDK.getMegaList(client.getInSharesList())
+                    // .forEach(function(share) {
+                        // var email = share.getUser();
+
+                        // term.echo("From " + email + ":");
+                    // });
+
+                MEGASDK.getMegaList(client.getContacts())
+                    .forEach(function(user) {
+                        var shares = client.getInShares(user);
+
+                        if (MEGASDK.isMegaList(shares) && shares.size()) {
+                            term.echo("From " + user.getEmail() + ":");
+
+                            MEGASDK.getMegaList(shares)
+                                .forEach(function(share) {
+                                    term.echo("    " + share.getName() + ' (' + accesslevels[client.getAccess(share)] + ')');
+                                });
+                        }
+                    });
+                listener.abort(null, MEGASDK.MegaError.API_OK);
+            }
+            else {
+                var node = client.getNodeByPath(String(argv[0]), cwd);
+
+                if (MEGASDK.isNULL(node) || !node.isFolder()) {
+                    assert(false, argv[0] + ': Not such directory.');
+                    listener.abort();
+                }
+                else if (argv.length == 1) {
+                    if (node.isOutShare()) {
+                        var name = node.getName()
+                        MEGASDK.getMegaList(client.getOutShares(node))
+                            .forEach(function(share) {
+                                var line = '    ' + name;
+
+                                // XXX: getNodeHandle is missing
+                                // node = share.getNodeHandle();
+
+                                if (!share.getUser() && node.isExported()) {
+                                    line += ', shared as exported link';
+                                }
+                                else {
+                                    line += ', shared with ' + share.getUser() + ' (' + accesslevels[share.getAccess()] + ')';
+                                }
+
+                                line += ', on ' + new Date(share.getTimestamp() * 1000).toISOString();
+
+                                term.echo(line);
+                            });
+                    }
+                    else {
+                        assert(false, 'That is not being shared.');
+                    }
+                    listener.abort(null, MEGASDK.MegaError.API_OK);
+                }
+                else {
+                    var a = MEGASDK.MegaShare.ACCESS_UNKNOWN;
+
+                    if (argv.length > 2) {
+                        if (argv[2] == "r" || argv[2] == "ro") {
+                            a = MEGASDK.MegaShare.ACCESS_READ;
+                        }
+                        else if (argv[2] == "rw") {
+                            a = MEGASDK.MegaShare.ACCESS_READWRITE;
+                        }
+                        else if (argv[2] == "full") {
+                            a = MEGASDK.MegaShare.ACCESS_FULL;
+                        }
+                        else {
+                            assert(false, "Access level must be one of r, rw or full");
+
+                            return listener.abort();
+                        }
+                    }
+
+                    client.share(node, argv[1], a, MegaListener({
+                        onRequestFinish: function(api, request, error) {
+                            assert(error.getErrorCode() === MEGASDK.MegaError.API_OK,
+                                'Error sharing folder: ' + argv[0]);
+                        }
+                    }));
+
+                }
+            }
+        }
+        else if (cmd === 'users') {
+            var visibility = ['hidden','visible','session user'];
+            MEGASDK.getMegaList(client.getContacts())
+                .forEach(function(user) {
+                    var shares = client.getInShares(user);
+                    var line = '    ' + (user.getEmail() || '???')
+                        + ', ' + (visibility[user.getVisibility()] || 'unknown visibility');
+
+                    if (MEGASDK.isMegaList(shares)) {
+                        var size = shares.size();
+                        if (size) {
+                            line += ', sharing ' + size + ' folder(s)';
+                        }
+                    }
+
+                    // XXX: it->second.pubk.isvalid()
+
+                    term.echo(line);
+                });
+            listener.abort(null, MEGASDK.MegaError.API_OK);
+        }
         else {
             cmd = apiFuncs[cmd] || cmd;
 
@@ -507,12 +643,13 @@ MEGASDK.Terminal = function (client) {
                         // "mv srcremotepath dstremotepath",
                         // "cp srcremotepath dstremotepath|dstemail:",
                     /*  "sync [localpath dstremotepath|cancelslot]",*/
-                        "export remotepath [expireTime|del]",
-                        "share [remotepath [dstemail [r|rw|full] [origemail]]]",
+                        // "export remotepath [expireTime|del]",
+                        // "share [remotepath [dstemail [r|rw|full] [origemail]]]",
+                        "share [remotepath [dstemail [r|rw|full]]]",
                         // "invite dstemail [origemail|del|rmd]",
                         // "ipc handle a|d|i",
                         // "showpcr", HOW??
-                        // "users", HOW??
+                        "users",
                         // "getua attrname [email]",
                         // "putua attrname [del|set string|load file]",
                         // "putbps [limit|auto|none]",
@@ -572,4 +709,4 @@ var BANNER =
 '  /\\__|    |/ __ \\\\   / / __ \\_/        \\  \\___|  | \\|  |  |_> |  |   /        \\|    `   |    |  \\  \n'+
 '  \\________(____  /\\_/ (____  /_______  /\\___  |__|  |__|   __/|__|  /_______  /_______  |____|__ \\ \n'+
 '                \\/          \\/        \\/     \\/         |__|                 \\/        \\/        \\/ \n'+
-'                                                                           MEGA SDK version:  %%    \n';
+'                                                               MEGA SDK version:  %% (commitid)    \n';
