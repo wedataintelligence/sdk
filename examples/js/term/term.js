@@ -443,6 +443,37 @@ MEGASDK.Terminal = function (client) {
                 listener.abort(null, MEGASDK.MegaError.API_OK);
             }
         }
+        else if (cmd === 'export') {
+            var node = client.getNodeByPath(String(argv[0]), cwd);
+
+            if (MEGASDK.isNULL(node)) {
+                assert(false, argv[0] + ': Not such file/directory.');
+                listener.abort();
+            }
+            else if (argv[1] === 'del') {
+                client.disableExport(node);
+            }
+            else {
+                var ets;
+
+                if (typeof argv[1] === 'string') {
+                    if (argv[1][0] === '*') {
+                        ets = Math.floor(Date.now() / 1000) + parseInt(argv[1].substr(1));
+                    }
+                }
+                else if (typeof argv[1] === 'number') {
+                    ets = argv[1];
+                }
+
+                client.exportNode(node, ets || undefined, MegaListener({
+                    onRequestFinish: function(api, request, error) {
+                        if (error.getErrorCode() === MEGASDK.MegaError.API_OK) {
+                            term.echo("Exported link: " + request.getLink());
+                        }
+                    }
+                }));
+            }
+        }
         else if (cmd === 'share') {
             if (!argv.length) {
                 // list all shares (incoming and outgoing)
@@ -451,14 +482,12 @@ MEGASDK.Terminal = function (client) {
 
                 MEGASDK.getMegaList(client.getOutShares())
                     .forEach(function(share) {
-                        // XXX: getNodeHandle is missing
-                        // var node = share.getNodeHandle();
-                        // var name = node.getName();
-                        var name = '???';
+                        var handle = share.getBase64Handle();
+                        var node = client.getNodeByBase64Handle(handle);
+                        var name = !MEGASDK.isNULL(node) && node.getName() || '???';
                         var line = '    ' + name + ', shared ';
 
-                        // TODO: as exported etc
-                        if (!share.getUser() /*node.isExported()*/) {
+                        if (node.isExported()) {
                             line += 'as exported link';
                         }
                         else {
@@ -501,14 +530,19 @@ MEGASDK.Terminal = function (client) {
                     listener.abort();
                 }
                 else if (argv.length == 1) {
+                    // XXX: Sometimes node.isOutShare() retuns false for a node which is indeed an outshare :-/
                     if (node.isOutShare()) {
-                        var name = node.getName()
+                        // var name = node.getName()
                         MEGASDK.getMegaList(client.getOutShares(node))
                             .forEach(function(share) {
+                                var handle = share.getBase64Handle();
+                                console.debug('handle', handle);
+                                node = client.getNodeByBase64Handle(handle);
+                                var name = !MEGASDK.isNULL(node) && node.getName() || '???';
                                 var line = '    ' + name;
 
-                                // XXX: getNodeHandle is missing
-                                // node = share.getNodeHandle();
+                                // XXX: just using node.isExported() always detect the node
+                                // as exported, so additionaly checking for !share.getUser() :-/
 
                                 if (!share.getUser() && node.isExported()) {
                                     line += ', shared as exported link';
@@ -578,6 +612,14 @@ MEGASDK.Terminal = function (client) {
                 });
             listener.abort(null, MEGASDK.MegaError.API_OK);
         }
+        else if (cmd === 'retry') {
+            // XXX: client->abortbackoff ??
+            client.retryPendingConnections();
+        }
+        else if (cmd === 'recon') {
+            // XXX: client->disconnect ??
+            client.retryPendingConnections(true);
+        }
         else {
             cmd = apiFuncs[cmd] || cmd;
 
@@ -643,7 +685,7 @@ MEGASDK.Terminal = function (client) {
                         // "mv srcremotepath dstremotepath",
                         // "cp srcremotepath dstremotepath|dstemail:",
                     /*  "sync [localpath dstremotepath|cancelslot]",*/
-                        // "export remotepath [expireTime|del]",
+                        "export remotepath [expireTime|del]",
                         // "share [remotepath [dstemail [r|rw|full] [origemail]]]",
                         "share [remotepath [dstemail [r|rw|full]]]",
                         // "invite dstemail [origemail|del|rmd]",
@@ -656,8 +698,8 @@ MEGASDK.Terminal = function (client) {
                         // "killsession [all|sessionid]", -- TODO: killSession is missing
                         "whoami",
                         // "passwd",
-                        // "retry", client->abortbackoff ??
-                        // "recon", client->disconnect ??
+                        "retry",
+                        "recon",
                         "reload",
                         "logout",
                         "locallogout",
@@ -709,4 +751,4 @@ var BANNER =
 '  /\\__|    |/ __ \\\\   / / __ \\_/        \\  \\___|  | \\|  |  |_> |  |   /        \\|    `   |    |  \\  \n'+
 '  \\________(____  /\\_/ (____  /_______  /\\___  |__|  |__|   __/|__|  /_______  /_______  |____|__ \\ \n'+
 '                \\/          \\/        \\/     \\/         |__|                 \\/        \\/        \\/ \n'+
-'                                                               MEGA SDK version:  %% (commitid)    \n';
+'                                                               MEGA SDK version:  %% (83f9bbbf)    \n';
