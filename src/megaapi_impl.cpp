@@ -789,7 +789,19 @@ MegaSharePrivate::~MegaSharePrivate()
 
 const char *MegaSharePrivate::getUser()
 {
-	return user;
+    return user;
+}
+
+char *MegaSharePrivate::getBase64Handle()
+{
+    if (nodehandle == UNDEF)
+    {
+        return NULL;
+    }
+
+    char *base64Handle = new char[12];
+    Base64::btoa((byte*)&(nodehandle), MegaClient::NODEHANDLE, base64Handle);
+    return base64Handle;
 }
 
 uint64_t MegaSharePrivate::getNodeHandle()
@@ -959,7 +971,31 @@ const char* MegaTransferPrivate::getPath() const
 
 const char* MegaTransferPrivate::getParentPath() const
 {
-	return parentPath;
+    return parentPath;
+}
+
+char *MegaTransferPrivate::getBase64NodeHandle() const
+{
+    if (nodeHandle == UNDEF)
+    {
+        return NULL;
+    }
+
+    char *base64Handle = new char[12];
+    Base64::btoa((byte*)&(nodeHandle), MegaClient::NODEHANDLE, base64Handle);
+    return base64Handle;
+}
+
+char *MegaTransferPrivate::getParentBase64Handle() const
+{
+    if (parentHandle == UNDEF)
+    {
+        return NULL;
+    }
+
+    char *base64Handle = new char[12];
+    Base64::btoa((byte*)&(parentHandle), MegaClient::NODEHANDLE, base64Handle);
+    return base64Handle;
 }
 
 uint64_t MegaTransferPrivate::getNodeHandle() const
@@ -1267,6 +1303,18 @@ MegaHandle MegaContactRequestPrivate::getHandle() const
     return handle;
 }
 
+char *MegaContactRequestPrivate::getBase64Handle() const
+{
+    if (handle == UNDEF)
+    {
+        return NULL;
+    }
+
+    char *base64Handle = new char[12];
+    Base64::btoa((byte*)&(handle), MegaClient::NODEHANDLE, base64Handle);
+    return base64Handle;
+}
+
 char *MegaContactRequestPrivate::getSourceEmail() const
 {
     return sourceEmail;
@@ -1476,7 +1524,19 @@ uint64_t MegaRequestPrivate::getNodeHandle() const
 
 const char* MegaRequestPrivate::getLink() const
 {
-	return link;
+    return link;
+}
+
+char *MegaRequestPrivate::getParentBase64Handle() const
+{
+    if (parentHandle == UNDEF)
+    {
+        return NULL;
+    }
+
+    char *base64Handle = new char[12];
+    Base64::btoa((byte*)&(parentHandle), MegaClient::NODEHANDLE, base64Handle);
+    return base64Handle;
 }
 
 uint64_t MegaRequestPrivate::getParentHandle() const
@@ -1817,7 +1877,19 @@ const char *MegaRequestPrivate::__str__() const
 
 const char *MegaRequestPrivate::__toString() const
 {
-	return getRequestString();
+    return getRequestString();
+}
+
+char *MegaRequestPrivate::getBase64NodeHandle() const
+{
+    if (nodeHandle == UNDEF)
+    {
+        return NULL;
+    }
+
+    char *base64Handle = new char[12];
+    Base64::btoa((byte*)&(nodeHandle), MegaClient::NODEHANDLE, base64Handle);
+    return base64Handle;
 }
 
 MegaStringListPrivate::MegaStringListPrivate()
@@ -2438,6 +2510,7 @@ void MegaApiImpl::init(MegaApi *api, const char *appKey, MegaGfxProcessor* proce
 #endif
 }
 
+#ifdef EMSCRIPTEN
 void MegaApiImpl::emscriptenLoop(void *param)
 {
     MegaApiImpl *p = (MegaApiImpl *)param;
@@ -2445,6 +2518,7 @@ void MegaApiImpl::emscriptenLoop(void *param)
     p->sendPendingRequests();
     p->client->exec();
 }
+#endif
 
 MegaApiImpl::~MegaApiImpl()
 {
@@ -2664,6 +2738,11 @@ void MegaApiImpl::killSession(MegaHandle sessionHandle, MegaRequestListener *lis
     request->setNodeHandle(sessionHandle);
     requestQueue.push(request);
     waiter->notify();
+}
+
+void MegaApiImpl::killSession(const char *sessionHandle, MegaRequestListener *listener)
+{
+    killSession(base64ToHandle(sessionHandle), listener);
 }
 
 void MegaApiImpl::getUserData(MegaRequestListener *listener)
@@ -3166,6 +3245,11 @@ void MegaApiImpl::getPaymentId(handle productHandle, MegaRequestListener *listen
     waiter->notify();
 }
 
+void MegaApiImpl::getPaymentId(const char *productHandle, MegaRequestListener *listener)
+{
+    getPaymentId(base64ToHandle(productHandle), listener);
+}
+
 void MegaApiImpl::upgradeAccount(MegaHandle productHandle, int paymentMethod, MegaRequestListener *listener)
 {
     MegaRequestPrivate *request = new MegaRequestPrivate(MegaRequest::TYPE_UPGRADE_ACCOUNT, listener);
@@ -3173,6 +3257,11 @@ void MegaApiImpl::upgradeAccount(MegaHandle productHandle, int paymentMethod, Me
     request->setNumber(paymentMethod);
     requestQueue.push(request);
     waiter->notify();
+}
+
+void MegaApiImpl::upgradeAccount(const char *productHandle, int paymentMethod, MegaRequestListener *listener)
+{
+    upgradeAccount(base64ToHandle(productHandle), paymentMethod, listener);
 }
 
 void MegaApiImpl::submitPurchaseReceipt(int gateway, const char *receipt, MegaRequestListener *listener)
@@ -7944,6 +8033,11 @@ MegaNode* MegaApiImpl::getNodeByHandle(handle handle)
     return result;
 }
 
+MegaNode *MegaApiImpl::getNodeByBase64Handle(const char *nodehandle)
+{
+    return getNodeByHandle(base64ToHandle(nodehandle));
+}
+
 MegaContactRequest *MegaApiImpl::getContactRequestByHandle(MegaHandle handle)
 {
     sdkMutex.lock();
@@ -7955,6 +8049,11 @@ MegaContactRequest *MegaApiImpl::getContactRequestByHandle(MegaHandle handle)
     MegaContactRequest* request = MegaContactRequestPrivate::fromContactRequest(client->pcrindex.at(handle));
     sdkMutex.unlock();
     return request;
+}
+
+MegaContactRequest *MegaApiImpl::getContactRequestByBase64Handle(const char *handle)
+{
+    return getContactRequestByHandle(base64ToHandle(handle));
 }
 
 void MegaApiImpl::sendPendingTransfers()
@@ -9829,14 +9928,29 @@ long long MegaAccountDetailsPrivate::getStorageUsed(MegaHandle handle)
     return details.storage[handle].bytes;
 }
 
+long long MegaAccountDetailsPrivate::getStorageUsed(const char *handle)
+{
+    return getStorageUsed(MegaApiImpl::base64ToHandle(handle));
+}
+
 long long MegaAccountDetailsPrivate::getNumFiles(MegaHandle handle)
 {
     return details.storage[handle].files;
 }
 
+long long MegaAccountDetailsPrivate::getNumFiles(const char *handle)
+{
+    return getNumFiles(MegaApiImpl::base64ToHandle(handle));
+}
+
 long long MegaAccountDetailsPrivate::getNumFolders(MegaHandle handle)
 {
     return details.storage[handle].folders;
+}
+
+long long MegaAccountDetailsPrivate::getNumFolders(const char *handle)
+{
+    return getNumFolders(MegaApiImpl::base32ToHandle(handle));
 }
 
 MegaAccountDetails* MegaAccountDetailsPrivate::copy()
@@ -10063,6 +10177,18 @@ MegaPricingPrivate::~MegaPricingPrivate()
 int MegaPricingPrivate::getNumProducts()
 {
     return handles.size();
+}
+
+char *MegaPricingPrivate::getBase64Handle(int productIndex)
+{
+    if ((unsigned)productIndex < handles.size())
+    {
+        char *base64Handle = new char[12];
+        Base64::btoa((byte*)&(handles[productIndex]), MegaClient::NODEHANDLE, base64Handle);
+        return base64Handle;
+    }
+
+    return NULL;
 }
 
 handle MegaPricingPrivate::getHandle(int productIndex)
@@ -10444,6 +10570,18 @@ bool MegaAccountSessionPrivate::isAlive() const
 MegaHandle MegaAccountSessionPrivate::getHandle() const
 {
     return session.id;
+}
+
+char *MegaAccountSessionPrivate::getBase64Handle() const
+{
+    if (session.id == UNDEF)
+    {
+        return NULL;
+    }
+
+    char *base64Handle = new char[12];
+    Base64::btoa((byte*)&(session.id), MegaClient::NODEHANDLE, base64Handle);
+    return base64Handle;
 }
 
 MegaAccountSessionPrivate::MegaAccountSessionPrivate(const AccountSession *session)

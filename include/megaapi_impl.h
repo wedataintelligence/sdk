@@ -300,6 +300,7 @@ class MegaSharePrivate : public MegaShare
 		virtual ~MegaSharePrivate();
 		virtual const char *getUser();
 		virtual MegaHandle getNodeHandle();
+        virtual char *getBase64Handle();
 		virtual int getAccess();
 		virtual int64_t getTimestamp();
 
@@ -359,7 +360,9 @@ class MegaTransferPrivate : public MegaTransfer
 		virtual const char* getPath() const;
 		virtual const char* getParentPath() const;
         virtual MegaHandle getNodeHandle() const;
+        virtual char* getBase64NodeHandle() const;
         virtual MegaHandle getParentHandle() const;
+        virtual char* getParentBase64Handle() const;
 		virtual long long getStartPos() const;
 		virtual long long getEndPos() const;
 		virtual const char* getFileName() const;
@@ -420,6 +423,7 @@ public:
     virtual MegaContactRequest *copy() const;
 
     virtual MegaHandle getHandle() const;
+    virtual char* getBase64Handle() const;
     virtual char* getSourceEmail() const;
     virtual char* getSourceMessage() const;
     virtual char* getTargetEmail() const;
@@ -547,8 +551,10 @@ class MegaRequestPrivate : public MegaRequest
 		virtual const char* __str__() const;
 		virtual const char* __toString() const;
         virtual MegaHandle getNodeHandle() const;
+        virtual char* getBase64NodeHandle() const;
 		virtual const char* getLink() const;
         virtual MegaHandle getParentHandle() const;
+        virtual char* getParentBase64Handle() const;
         virtual const char* getSessionKey() const;
 		virtual const char* getName() const;
 		virtual const char* getEmail() const;
@@ -641,6 +647,7 @@ public:
     virtual bool isCurrent() const;
     virtual bool isAlive() const;
     virtual MegaHandle getHandle() const;
+    virtual char *getBase64Handle() const;
 
 private:
     MegaAccountSessionPrivate(const AccountSession *session);
@@ -702,8 +709,13 @@ class MegaAccountDetailsPrivate : public MegaAccountDetails
 
         virtual int getNumUsageItems();
         virtual long long getStorageUsed(MegaHandle handle);
+        virtual long long getStorageUsed(const char *handle);
+
         virtual long long getNumFiles(MegaHandle handle);
+        virtual long long getNumFiles(const char *handle);
+
         virtual long long getNumFolders(MegaHandle handle);
+        virtual long long getNumFolders(const char *handle);
 
         virtual MegaAccountDetails* copy();
 
@@ -730,6 +742,7 @@ public:
     virtual ~MegaPricingPrivate();
     virtual int getNumProducts();
     virtual MegaHandle getHandle(int productIndex);
+    virtual char *getBase64Handle(int productIndex);
     virtual int getProLevel(int productIndex);
     virtual int getGBStorage(int productIndex);
     virtual int getGBTransfer(int productIndex);
@@ -1020,6 +1033,7 @@ class MegaApiImpl : public MegaApp
         void fastLogin(const char* email, const char *stringHash, const char *base64pwkey, MegaRequestListener *listener = NULL);
         void fastLogin(const char* session, MegaRequestListener *listener = NULL);
         void killSession(MegaHandle sessionHandle, MegaRequestListener *listener = NULL);
+        void killSession(const char* sessionHandle, MegaRequestListener *listener = NULL);
         void getUserData(MegaRequestListener *listener = NULL);
         void getUserData(MegaUser *user, MegaRequestListener *listener = NULL);
         void getUserData(const char *user, MegaRequestListener *listener = NULL);
@@ -1068,7 +1082,9 @@ class MegaApiImpl : public MegaApp
         void fetchNodes(MegaRequestListener *listener = NULL);
         void getPricing(MegaRequestListener *listener = NULL);
         void getPaymentId(handle productHandle, MegaRequestListener *listener = NULL);
+        void getPaymentId(const char* productHandle, MegaRequestListener *listener = NULL);
         void upgradeAccount(MegaHandle productHandle, int paymentMethod, MegaRequestListener *listener = NULL);
+        void upgradeAccount(const char *productHandle, int paymentMethod, MegaRequestListener *listener = NULL);
         void submitPurchaseReceipt(int gateway, const char* receipt, MegaRequestListener *listener = NULL);
         void creditCardStore(const char* address1, const char* address2, const char* city,
                              const char* province, const char* country, const char *postalcode,
@@ -1163,7 +1179,9 @@ class MegaApiImpl : public MegaApp
         char *getNodePath(MegaNode *node);
         MegaNode *getNodeByPath(const char *path, MegaNode *n = NULL);
         MegaNode *getNodeByHandle(handle handler);
+        MegaNode *getNodeByBase64Handle(const char* nodehandle);
         MegaContactRequest *getContactRequestByHandle(MegaHandle handle);
+        MegaContactRequest *getContactRequestByBase64Handle(const char *handle);
         MegaUserList* getContacts();
         MegaUser* getContact(const char* email);
         MegaNodeList *getInShares(MegaUser* user);

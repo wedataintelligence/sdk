@@ -137,6 +137,7 @@ interface MegaShare
 {
     [Const] DOMString getUser();
     //MegaHandle getNodeHandle();
+    DOMString getBase64Handle();
     long getAccess();
     long getTimestamp();
 };
@@ -246,8 +247,10 @@ interface MegaRequest
     [Const] DOMString getRequestString();
     //DOMString toString();
     //MegaHandle getNodeHandle();
+    DOMString getBase64NodeHandle();
     [Const] DOMString getLink();
     //MegaHandle getParentHandle();
+    DOMString getParentBase64Handle();
     [Const] DOMString getSessionKey();
     [Const] DOMString getName();
     [Const] DOMString getEmail();
@@ -290,8 +293,13 @@ interface MegaTransfer
     long getTotalBytes();
     [Const] DOMString getPath();
     [Const] DOMString getParentPath();
+
     //MegaHandle getNodeHandle();
+    DOMString getBase64NodeHandle();
+
     //MegaHandle getParentHandle();
+    DOMString getParentBase64Handle();
+
     long getStartPos();
     long getEndPos();
     [Const] DOMString getFileName();
@@ -338,6 +346,8 @@ enum ContactRequestAction
 interface MegaContactRequest
 {
     //MegaHandle getHandle();
+    DOMString getBase64Handle();
+
     DOMString getSourceEmail();
     DOMString getSourceMessage();
     DOMString getTargetEmail();
@@ -562,6 +572,7 @@ interface MegaApi
     void fastLogin(DOMString email, DOMString stringHash, DOMString base64pwkey, MegaRequestListenerInterface listener);
     void fastLogin(DOMString session, MegaRequestListenerInterface listener);
     //void killSession(MegaHandle sessionHandle, MegaRequestListenerInterface listener);
+    void killSession(DOMString sessionHandle, MegaRequestListenerInterface listener);
     void getUserData(MegaRequestListenerInterface listener);
     void getUserData(MegaUser user, MegaRequestListenerInterface listener);
     //void getUserData(DOMString user, MegaRequestListenerInterface listener);
@@ -614,7 +625,9 @@ interface MegaApi
     void getExtendedAccountDetails(boolean sessions, boolean purchases, boolean transactions, MegaRequestListenerInterface listener);
     void getPricing(MegaRequestListenerInterface listener);
     //void getPaymentId(MegaHandle productHandle, MegaRequestListenerInterface listener);
+    void getPaymentId(DOMString productHandle, MegaRequestListenerInterface listener);
     //void upgradeAccount(MegaHandle productHandle, long paymentMethod, MegaRequestListenerInterface listener);
+    void upgradeAccount(DOMString productHandle, long paymentMethod, MegaRequestListenerInterface listener);
     void submitPurchaseReceipt(DOMString receipt, MegaRequestListenerInterface listener);
     void submitPurchaseReceipt(long gateway, DOMString receipt, MegaRequestListenerInterface listener);
     void creditCardStore(DOMString address1, DOMString address2, DOMString city,
@@ -683,7 +696,9 @@ interface MegaApi
     DOMString getNodePath(MegaNode node);
     MegaNode getNodeByPath(DOMString path, MegaNode n);
     //MegaNode getNodeByHandle(MegaHandle h);
+    MegaNode getNodeByBase64Handle(DOMString h);
     //MegaContactRequest getContactRequestByHandle(MegaHandle handle);
+    MegaContactRequest getContactRequestByBase64Handle(DOMString handle);
     MegaUserList getContacts();
     MegaUser getContact(DOMString email);
     MegaNodeList getInShares(MegaUser user);
@@ -763,6 +778,7 @@ interface MegaAccountSession
     boolean isCurrent();
     boolean isAlive();
     //MegaHandle getHandle();
+    DOMString getBase64Handle();
 };
 
 [Prefix="mega::"]
@@ -814,9 +830,14 @@ interface MegaAccountDetails
     long getTransferMax();
     long getTransferOwnUsed();
     long getNumUsageItems();
+
     //long getStorageUsed(MegaHandle handle);
     //long getNumFiles(MegaHandle handle);
     //long getNumFolders(MegaHandle handle);
+    long getStorageUsed(DOMString handle);
+    long getNumFiles(DOMString handle);
+    long getNumFolders(DOMString handle);
+
     long getNumBalances();
     MegaAccountBalance getBalance(long i);
     long getNumSessions();
@@ -832,6 +853,7 @@ interface MegaPricing
 {
     long getNumProducts();
     //MegaHandle getHandle(long productIndex);
+    DOMString getBase64Handle(long productIndex);
     long getProLevel(long productIndex);
     long getGBStorage(long productIndex);
     long getGBTransfer(long productIndex);

@@ -423,6 +423,11 @@ MegaHandle MegaShare::getNodeHandle()
     return INVALID_HANDLE;
 }
 
+char *MegaShare::getBase64Handle()
+{
+    return NULL;
+}
+
 int MegaShare::getAccess()
 {
     return 0;
@@ -466,7 +471,12 @@ const char *MegaRequest::__toString() const
 
 MegaHandle MegaRequest::getNodeHandle() const
 {
-	return INVALID_HANDLE;
+    return INVALID_HANDLE;
+}
+
+char *MegaRequest::getBase64NodeHandle() const
+{
+    return NULL;
 }
 
 const char *MegaRequest::getLink() const
@@ -476,7 +486,12 @@ const char *MegaRequest::getLink() const
 
 MegaHandle MegaRequest::getParentHandle() const
 {
-	return INVALID_HANDLE;
+    return INVALID_HANDLE;
+}
+
+char *MegaRequest::getParentBase64Handle() const
+{
+    return NULL;
 }
 
 const char *MegaRequest::getSessionKey() const
@@ -654,12 +669,22 @@ const char *MegaTransfer::getParentPath() const
 
 MegaHandle MegaTransfer::getNodeHandle() const
 {
-	return INVALID_HANDLE;
+    return INVALID_HANDLE;
+}
+
+char *MegaTransfer::getBase64NodeHandle() const
+{
+    return NULL;
 }
 
 MegaHandle MegaTransfer::getParentHandle() const
 {
-	return INVALID_HANDLE;
+    return INVALID_HANDLE;
+}
+
+char *MegaTransfer::getParentBase64Handle() const
+{
+    return NULL;
 }
 
 long long MegaTransfer::getStartPos() const
@@ -873,6 +898,11 @@ MegaContactRequest *MegaContactRequest::copy() const
 MegaHandle MegaContactRequest::getHandle() const
 {
     return INVALID_HANDLE;
+}
+
+char *MegaContactRequest::getBase64Handle() const
+{
+    return NULL;
 }
 
 char *MegaContactRequest::getSourceEmail() const
@@ -1105,6 +1135,11 @@ void MegaApi::fastLogin(const char *session, MegaRequestListener *listener)
 }
 
 void MegaApi::killSession(MegaHandle sessionHandle, MegaRequestListener *listener)
+{
+    pImpl->killSession(sessionHandle, listener);
+}
+
+void MegaApi::killSession(const char *sessionHandle, MegaRequestListener *listener)
 {
     pImpl->killSession(sessionHandle, listener);
 }
@@ -1349,7 +1384,17 @@ void MegaApi::getPaymentId(MegaHandle productHandle, MegaRequestListener *listen
     pImpl->getPaymentId(productHandle, listener);
 }
 
+void MegaApi::getPaymentId(const char *productHandle, MegaRequestListener *listener)
+{
+    pImpl->getPaymentId(productHandle, listener);
+}
+
 void MegaApi::upgradeAccount(MegaHandle productHandle, int paymentMethod, MegaRequestListener *listener)
+{
+    pImpl->upgradeAccount(productHandle, paymentMethod, listener);
+}
+
+void MegaApi::upgradeAccount(const char *productHandle, int paymentMethod, MegaRequestListener *listener)
 {
     pImpl->upgradeAccount(productHandle, paymentMethod, listener);
 }
@@ -2050,6 +2095,11 @@ MegaNode* MegaApi::getNodeByPath(const char *path, MegaNode* node)
     return pImpl->getNodeByPath(path, node);
 }
 
+MegaNode *MegaApi::getNodeByBase64Handle(const char *nodehandle)
+{
+    return pImpl->getNodeByPath(nodehandle);
+}
+
 MegaNode* MegaApi::getNodeByHandle(uint64_t h)
 {
     return pImpl->getNodeByHandle(h);
@@ -2058,6 +2108,11 @@ MegaNode* MegaApi::getNodeByHandle(uint64_t h)
 MegaContactRequest *MegaApi::getContactRequestByHandle(MegaHandle handle)
 {
     return pImpl->getContactRequestByHandle(handle);
+}
+
+MegaContactRequest *MegaApi::getContactRequestByBase64Handle(const char *handle)
+{
+    return pImpl->getContactRequestByBase64Handle(handle);
 }
 
 void MegaApi::updateStats()
@@ -2255,12 +2310,27 @@ long long MegaAccountDetails::getStorageUsed(MegaHandle handle)
     return 0;
 }
 
+long long MegaAccountDetails::getStorageUsed(const char *handle)
+{
+    return 0;
+}
+
 long long MegaAccountDetails::getNumFiles(MegaHandle handle)
 {
     return 0;
 }
 
+long long MegaAccountDetails::getNumFiles(const char *handle)
+{
+    return 0;
+}
+
 long long MegaAccountDetails::getNumFolders(MegaHandle handle)
+{
+    return 0;
+}
+
+long long MegaAccountDetails::getNumFolders(const char *handle)
 {
     return 0;
 }
@@ -2353,6 +2423,11 @@ int MegaPricing::getNumProducts()
 MegaHandle MegaPricing::getHandle(int productIndex)
 {
     return INVALID_HANDLE;
+}
+
+char *MegaPricing::getBase64Handle(int productIndex)
+{
+    return NULL;
 }
 
 int MegaPricing::getProLevel(int productIndex)
@@ -2548,6 +2623,11 @@ bool MegaAccountSession::isAlive() const
 MegaHandle MegaAccountSession::getHandle() const
 {
     return INVALID_HANDLE;
+}
+
+char *MegaAccountSession::getBase64Handle() const
+{
+    return NULL;
 }
 
 

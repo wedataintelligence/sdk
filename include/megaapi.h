@@ -1054,6 +1054,15 @@ class MegaShare
         virtual MegaHandle getNodeHandle();
 
         /**
+         * @brief Returns the handle of the folder that is being shared (base64-encoded)
+         *
+         * You take the ownership of the returned value
+         *
+         * @return The handle of the folder that is being shared (base64-encoded)
+         */
+        virtual char *getBase64Handle();
+
+        /**
          * @brief Returns the access level of the sharing
          *
          * Possible return values are:
@@ -1447,6 +1456,43 @@ class MegaRequest
         virtual MegaHandle getNodeHandle() const;
 
         /**
+         * @brief Returns the handle (base64-encoded) of a node related to the request
+         *
+         * This value is valid for these requests:
+         * - MegaApi::moveNode - Returns the handle of the node to move
+         * - MegaApi::copyNode - Returns the handle of the node to copy
+         * - MegaApi::renameNode - Returns the handle of the node to rename
+         * - MegaApi::remove - Returns the handle of the node to remove
+         * - MegaApi::sendFileToUser - Returns the handle of the node to send
+         * - MegaApi::share - Returns the handle of the folder to share
+         * - MegaApi::getThumbnail - Returns the handle of the node to get the thumbnail
+         * - MegaApi::getPreview - Return the handle of the node to get the preview
+         * - MegaApi::cancelGetThumbnail - Return the handle of the node
+         * - MegaApi::cancelGetPreview - Returns the handle of the node
+         * - MegaApi::setThumbnail - Returns the handle of the node
+         * - MegaApi::setPreview - Returns the handle of the node
+         * - MegaApi::exportNode - Returns the handle of the node
+         * - MegaApi::disableExport - Returns the handle of the node
+         * - MegaApi::getPaymentId - Returns the handle of the product
+         * - MegaApi::syncFolder - Returns the handle of the folder in MEGA
+         * - MegaApi::resumeSync - Returns the handle of the folder in MEGA
+         * - MegaApi::removeSync - Returns the handle of the folder in MEGA
+         * - MegaApi::upgradeAccount - Returns that handle of the product
+         * - MegaApi::replyContactRequest - Returns the handle of the contact request
+         *
+         * This value is valid for these requests in onRequestFinish when the
+         * error code is MegaError::API_OK:
+         * - MegaApi::createFolder - Returns the handle of the new folder
+         * - MegaApi::copyNode - Returns the handle of the new node
+         * - MegaApi::importFileLink - Returns the handle of the new node
+         *
+         * You take the ownership of the returned value
+         *
+         * @return Handle (base64-encoded) of a node related to the request
+         */
+        virtual char* getBase64NodeHandle() const;
+
+        /**
          * @brief Returns a link related to the request
          *
          * This value is valid for these requests:
@@ -1485,6 +1531,23 @@ class MegaRequest
          * @return Handle of a parent node related to the request
          */
         virtual MegaHandle getParentHandle() const;
+
+        /**
+         * @brief Returns the handle (base64-encoded) of a parent node related to the request
+         *
+         * This value is valid for these requests:
+         * - MegaApi::createFolder - Returns the handle of the parent folder
+         * - MegaApi::moveNode - Returns the handle of the new parent for the node
+         * - MegaApi::copyNode - Returns the handle of the parent for the new node
+         * - MegaApi::importFileLink - Returns the handle of the node that receives the imported file
+         *
+         * This value is valid for these requests in onRequestFinish when the
+         * error code is MegaError::API_OK:
+         * - MegaApi::syncFolder - Returns a fingerprint of the local folder, to resume the sync with (MegaApi::resumeSync)
+         *
+         * @return Handle (base64-encoded) of a parent node related to the request
+         */
+        virtual char* getParentBase64Handle() const;
 
         /**
          * @brief Returns a session key related to the request
@@ -1963,6 +2026,21 @@ class MegaTransfer
         virtual MegaHandle getNodeHandle() const;
 
         /**
+         * @brief Returns the handle (base64-encoded) related to this transfer
+         *
+         * For downloads, this function returns the handle of the source node.
+         *
+         * For uploads, it returns the handle of the new node in MegaTransferListener::onTransferFinish
+         * and MegaListener::onTransferFinish when the error code is API_OK. Otherwise, it returns
+         * NULL.
+         *
+         * You take the ownership of the returned value
+         *
+         * @return The handle (base64-encoded) related to the transfer.
+         */
+        virtual char* getBase64NodeHandle() const;
+
+        /**
          * @brief Returns the handle of the parent node related to this transfer
          *
          * For downloads, this function returns always mega::INVALID_HANDLE. For uploads,
@@ -1971,6 +2049,18 @@ class MegaTransfer
          * @return The handle of the destination folder for uploads, or mega::INVALID_HANDLE for downloads.
          */
         virtual MegaHandle getParentHandle() const;
+
+        /**
+         * @brief Returns the handle (base64-encoded) of the parent node related to this transfer
+         *
+         * For downloads, this function returns always NULL. For uploads,
+         * it returns the handle of the destination node (folder) for the uploaded file.
+         *
+         * You take the ownership of the returned value.
+         *
+         * @return The handle (base64-encoded) of the destination folder for uploads, or NULL for downloads.
+         */
+        virtual char* getParentBase64Handle() const;
 
         /**
          * @brief Returns the starting position of the transfer for streaming downloads
@@ -2171,6 +2261,15 @@ public:
      * @return Handle of the object
      */
     virtual MegaHandle getHandle() const;
+
+    /**
+     * @brief Returns the handle (base64-encoded) of this MegaContactRequest object
+     *
+     * You take the ownership of the returned value.
+     *
+     * @return Handle (base64-encoded) of the object
+     */
+    virtual char* getBase64Handle() const;
 
     /**
      * @brief Returns the email of the request creator
@@ -3713,6 +3812,23 @@ class MegaApi
         void killSession(MegaHandle sessionHandle, MegaRequestListener *listener = NULL);
 
         /**
+         * @brief Close a MEGA session
+         *
+         * All clients using this session will be automatically logged out.
+         *
+         * You can get session information using MegaApi::getExtendedAccountDetails.
+         * Then use MegaAccountDetails::getNumSessions and MegaAccountDetails::getSession
+         * to get session info.
+         * MegaAccountSession::getBase64Handle provides the handle that this function needs.
+         *
+         * If you use NULL, all sessions except the current one will be closed
+         *
+         * @param Handle (base64-encoded) of the session. Use NULL to cancel all sessions except the current one
+         * @param listener MegaRequestListener to track this request
+         */
+        void killSession(const char* sessionHandle, MegaRequestListener *listener = NULL);
+
+        /**
          * @brief Get data about the logged account
          *
          * The associated request type with this request is MegaRequest::TYPE_GET_USER_DATA.
@@ -4595,6 +4711,25 @@ class MegaApi
         void getPaymentId(MegaHandle productHandle, MegaRequestListener *listener = NULL);
 
         /**
+         * @brief Get the payment URL for an upgrade
+         *
+         * The associated request type with this request is MegaRequest::TYPE_GET_PAYMENT_ID
+         * Valid data in the MegaRequest object received on callbacks:
+         * - MegaRequest::getNodeHandle - Returns the handle of the product
+         * - MegaRequest::getBase64NodeHandle - Returns the handle (base64-encoded) of the product
+         *
+         * Valid data in the MegaRequest object received in onRequestFinish when the error code
+         * is MegaError::API_OK:
+         * - MegaRequest::getLink - Payment ID
+         *
+         * @param productHandle Handle (base64-encoded) of the product (see MegaApi::getPricing)
+         * @param listener MegaRequestListener to track this request
+         *
+         * @see MegaApi::getPricing
+         */
+        void getPaymentId(const char *productHandle, MegaRequestListener *listener = NULL);
+
+        /**
          * @brief Upgrade an account
          * @param productHandle Product handle to purchase
          *
@@ -4618,6 +4753,31 @@ class MegaApi
          * @param listener MegaRequestListener to track this request
          */
         void upgradeAccount(MegaHandle productHandle, int paymentMethod, MegaRequestListener *listener = NULL);
+
+        /**
+         * @brief Upgrade an account
+         * @param productHandle Product handle (base64-encoded) to purchase
+         *
+         * It's possible to get all pricing plans with their product handles using
+         * MegaApi::getPricing
+         *
+         * The associated request type with this request is MegaRequest::TYPE_UPGRADE_ACCOUNT
+         * Valid data in the MegaRequest object received on callbacks:
+         * - MegaRequest::getNodeHandle - Returns the handle of the product
+         * - MegaRequest::getNumber - Returns the payment method
+         *
+         * @param paymentMethod Payment method
+         * Valid values are:
+         * - MegaApi::PAYMENT_METHOD_BALANCE = 0
+         * Use the account balance for the payment
+         *
+         * - MegaApi::PAYMENT_METHOD_CREDIT_CARD = 8
+         * Complete the payment with your credit card. Use MegaApi::creditCardStore to add
+         * a credit card to your account
+         *
+         * @param listener MegaRequestListener to track this request
+         */
+        void upgradeAccount(const char* productHandle, int paymentMethod, MegaRequestListener *listener = NULL);
 
         /**
          * @brief Submit a purchase receipt for verification
@@ -5725,10 +5885,25 @@ class MegaApi
          *
          * You take the ownership of the returned value.
          *
-         * @param MegaHandler Node handle to check
+         * @param h Node handle to check
          * @return MegaNode object with the handle, otherwise NULL
          */
         MegaNode *getNodeByHandle(MegaHandle h);
+
+        /**
+         * @brief Get the MegaNode that has a specific handle (base64-encoded)
+         *
+         * You can get the handle of a MegaNode using MegaNode::getBase64Handle.
+         *
+         * It is needed to be logged in and to have successfully completed a fetchNodes
+         * request before calling this function. Otherwise, it will return NULL.
+         *
+         * You take the ownership of the returned value.
+         *
+         * @param nodehandle Node handle to check
+         * @return MegaNode object with the handle, otherwise NULL
+         */
+        MegaNode *getNodeByBase64Handle(const char* nodehandle);
 
         /**
          * @brief Get the MegaContactRequest that has a specific handle
@@ -5741,6 +5916,18 @@ class MegaApi
          * @return MegaContactRequest object with the handle, otherwise NULL
          */
         MegaContactRequest *getContactRequestByHandle(MegaHandle handle);
+
+        /**
+         * @brief Get the MegaContactRequest that has a specific handle (base64-encoded)
+         *
+         * You can get the handle of a MegaContactRequest using MegaContactRequest::getBase64Handle.
+         *
+         * You take the ownership of the returned value.
+         *
+         * @param handle Contact request handle to check
+         * @return MegaContactRequest object with the handle, otherwise NULL
+         */
+        MegaContactRequest *getContactRequestByBase64Handle(const char *handle);
 
         /**
          * @brief Get all contacts of this MEGA account
@@ -6492,6 +6679,15 @@ public:
      * @return Handle of the session
      */
     virtual MegaHandle getHandle() const;
+
+    /**
+     * @brief Get the handle of the session (base64-encoded)
+     *
+     * You take the ownership of the returned value
+     *
+     * @return Handle of the session (base64-encoded)
+     */
+    virtual char *getBase64Handle() const;
 };
 
 /**
@@ -6732,6 +6928,17 @@ public:
     virtual long long getStorageUsed(MegaHandle handle);
 
     /**
+     * @brief Get the used storage in for a node
+     *
+     * Only root nodes are supported.
+     *
+     * @param handle Handle (base64-encoded) of the node to check
+     * @return Used storage (in bytes)
+     * @see MegaApi::getRootNode, MegaApi::getRubbishNode, MegaApi::getInboxNode
+     */
+    virtual long long getStorageUsed(const char *handle);
+
+    /**
      * @brief Get the number of files in a node
      *
      * Only root nodes are supported.
@@ -6743,6 +6950,17 @@ public:
     virtual long long getNumFiles(MegaHandle handle);
 
     /**
+     * @brief Get the number of files in a node
+     *
+     * Only root nodes are supported.
+     *
+     * @param handle Handle (base64-encoded) of the node to check
+     * @return Number of files in the node
+     * @see MegaApi::getRootNode, MegaApi::getRubbishNode, MegaApi::getInboxNode
+     */
+    virtual long long getNumFiles(const char *handle);
+
+    /**
      * @brief Get the number of folders in a node
      *
      * Only root nodes are supported.
@@ -6752,6 +6970,17 @@ public:
      * @see MegaApi::getRootNode, MegaApi::getRubbishNode, MegaApi::getInboxNode
      */
     virtual long long getNumFolders(MegaHandle handle);
+
+    /**
+     * @brief Get the number of folders in a node
+     *
+     * Only root nodes are supported.
+     *
+     * @param handle Handle (base64-encoded) of the node to check
+     * @return Number of folders in the node
+     * @see MegaApi::getRootNode, MegaApi::getRubbishNode, MegaApi::getInboxNode
+     */
+    virtual long long getNumFolders(const char *handle);
 
     /**
      * @brief Creates a copy of this MegaAccountDetails object.
@@ -6866,6 +7095,17 @@ public:
      * @see MegaApi::getPaymentId
      */
     virtual MegaHandle getHandle(int productIndex);
+
+    /**
+     * @brief Get the handle (base64-encoded) of a product
+     *
+     * You take the ownership of the returned value.
+     *
+     * @param productIndex Product index (from 0 to MegaPricing::getNumProducts)
+     * @return Handle (base64-encoded) of the product
+     * @see MegaApi::getPaymentId
+     */
+    virtual char *getBase64Handle(int productIndex);
 
     /**
      * @brief Get the PRO level associated with the product
