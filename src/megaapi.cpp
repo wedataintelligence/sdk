@@ -2097,7 +2097,7 @@ MegaNode* MegaApi::getNodeByPath(const char *path, MegaNode* node)
 
 MegaNode *MegaApi::getNodeByBase64Handle(const char *nodehandle)
 {
-    return pImpl->getNodeByPath(nodehandle);
+    return pImpl->getNodeByBase64Handle(nodehandle);
 }
 
 MegaNode* MegaApi::getNodeByHandle(uint64_t h)
