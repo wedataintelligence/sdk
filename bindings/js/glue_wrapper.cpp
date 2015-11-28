@@ -22,5 +22,8 @@ typedef int SortOrder;
 typedef int AccountType;
 typedef int SubscriptionStatus;
 
+typedef long long LongLong;
+typedef unsigned long long UnsignedLongLong;
+
 #include "glue.cpp"
 

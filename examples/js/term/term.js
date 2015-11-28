@@ -193,6 +193,8 @@ function MegaListener(aListener) {
 }
 
 var cwd = false;
+var debug = false;
+var quiet = false;
 MEGASDK.Terminal = function (client) {
     var $e = $('#terminal').empty();
 
@@ -263,7 +265,7 @@ MEGASDK.Terminal = function (client) {
                 type = 'debug';
             }
             console[type].apply(console, arguments);
-            if (type === 'info' || type === 'error' || type === 'warn') {
+            if ((debug || type === 'info' || type === 'error' || type === 'warn') && !quiet) {
                 var color = colors[type];
                 if (color) {
                     var tag = type[0] === 'e' || type[0] === 'w' ? '&#91;!&#93;' : '';
@@ -338,6 +340,9 @@ MEGASDK.Terminal = function (client) {
         if (cmd === 'mkdir') {
             client.createFolder(argv[0], cwd);
         }
+        else if (cmd === 'debug') {
+            debug = !debug;
+        }
         else if (cmd === 'version') {
             term.echo("MEGA SDK version: " + client.getVersion());
             listener.abort(null, MEGASDK.MegaError.API_OK);
@@ -378,6 +383,7 @@ MEGASDK.Terminal = function (client) {
             }
         }
         else if (cmd === 'whoami') {
+            listener.pause();
             client.getUserData(MegaListener({
                 onRequestFinish: function(api, request, error) {
                     assert(client === api, 'getUserData: Unexpected MegaApi instance');
@@ -387,8 +393,96 @@ MEGASDK.Terminal = function (client) {
                     if (error.getErrorCode() === MEGASDK.MegaError.API_OK) {
                         term.echo("[[;#C6C7C6;]Account Owner:] " + request.getName());
                         term.echo("[[;#C6C7C6;]Account E-Mail:] " + api.getMyEmail());
-                        term.echo("[[;#C6C7C6;]Account PUBKEY:] " + request.getPassword());
-                        term.echo("[[;#C6C7C6;]Account PRIVKEY:] " + request.getPrivateKey());
+                        // term.echo("[[;#C6C7C6;]Account PUBKEY:] " + request.getPassword());
+                        // term.echo("[[;#C6C7C6;]Account PRIVKEY:] " + request.getPrivateKey());
+
+                        quiet = true;
+                        client.getExtendedAccountDetails(true, true, true, MegaListener({
+                            onRequestFinish: function(api, request, error) {
+                                if (error.getErrorCode() === MEGASDK.MegaError.API_OK) {
+                                    var data = request.getMegaAccountDetails();
+                                    var total = MEGASDK.getUint64(data.getStorageMax());
+                                    var used = MEGASDK.getUint64(data.getStorageUsed());
+
+                                    term.echo("Used storage: " + MEGASDK.formatBytes(used)
+                                        + " (" + used + " bytes) " + Math.ceil(100 * used / total) + "%");
+                                    term.echo("Available storage: " + MEGASDK.formatBytes(total)
+                                        + " (" + total + " bytes)");
+
+                                    ['Root', 'Inbox', 'Rubbish'].forEach(function(p) {
+                                        var node = client['get' + p + 'Node']();
+                                        var handle = node.getBase64Handle();
+                                        term.echo("    In " + p.toUpperCase()
+                                            + ": " + MEGASDK.formatBytes(data.getStorageUsed(handle))
+                                            + " in " + data.getNumFiles(handle) + " file(s)"
+                                            + " and " + data.getNumFolders(handle) + " folder(s)");
+                                    });
+
+                                    // TODO: transfers
+
+                                    var proLevel = data.getProLevel();
+                                    if (proLevel) {
+                                        term.echo("PRO Level: " + proLevel);
+                                        term.echo("Subscription type: " + data.getSubscriptionStatus());
+                                        term.echo("Account Balance:");
+
+                                        MEGASDK.getMegaAccountList('Balance', data)
+                                            .forEach(function(a) {
+                                                term.echo("    Balance: " + a.getCurrency() + " " + a.getAmount());
+                                            });
+                                    }
+
+                                    term.echo("Purchase history:");
+                                    MEGASDK.getMegaAccountList('Purchase', data)
+                                        .forEach(function(p) {
+                                            var data = [
+                                                'ID: ' + p.getHandle(),
+                                                'Time: ' + MEGASDK.timeStampToDate(p.getTimestamp(), true),
+                                                'Amount: ' + p.getCurrency() + ' ' + p.getAmount(),
+                                                'Payment Method: ' + p.getMethod()
+                                            ];
+                                            term.echo("    " + data.join(", "));
+                                        });
+
+                                    term.echo("Transaction history:");
+                                    MEGASDK.getMegaAccountList('Transaction', data)
+                                        .forEach(function(p) {
+                                            var data = [
+                                                'ID: ' + p.getHandle(),
+                                                'Time: ' + MEGASDK.timeStampToDate(p.getTimestamp(), true),
+                                                'Delta: ' + p.getCurrency() + ' ' + p.getAmount() // XXX: no it->delta here ??
+                                            ];
+                                            term.echo("    " + data.join(", "));
+                                        });
+
+                                    term.echo("Currently Active Sessions:");
+                                    MEGASDK.getMegaAccountList('Session', data)
+                                        .forEach(function(p) {
+                                            if (!p.isAlive()) return;
+                                            var data = [
+                                                'Session ID: ' + p.getBase64Handle() + (p.isCurrent() ? " **CURRENT**" : ''),
+                                                'Session Start: ' + MEGASDK.timeStampToDate(p.getCreationTimestamp(), true),
+                                                'Most recent activity: ' + MEGASDK.timeStampToDate(p.getMostRecentUsage(), true),
+                                                'IP: ' + p.getIP() + ' (' + p.getCountry() + ')',
+                                                'User-Agent: ' + p.getUserAgent()
+                                            ];
+                                            data.map(function(ln) {
+                                                term.echo("    " + ln);
+                                            });
+                                            term.echo("----");
+                                        });
+
+                                    window.data=data;
+                                }
+                                quiet = false;
+                                listener.resume();
+                                listener.abort(null, MEGASDK.MegaError.API_OK);
+                            }
+                        }));
+                    }
+                    else {
+                        listener.resume();
+                        listener.abort();
                     }
                 }
             }));
@@ -705,7 +799,7 @@ MEGASDK.Terminal = function (client) {
                         "locallogout",
                         // "symlink",
                         "version",
-                        // "debug",
+                        "debug",
                         "quit"
                     ].map(function(ln) {
                         term.echo('[[;#D5F5B8;]' + Array(indent).join(" ") + termEscape(ln) + ']');
@@ -751,4 +845,4 @@ var BANNER =
 '  /\\__|    |/ __ \\\\   / / __ \\_/        \\  \\___|  | \\|  |  |_> |  |   /        \\|    `   |    |  \\  \n'+
 '  \\________(____  /\\_/ (____  /_______  /\\___  |__|  |__|   __/|__|  /_______  /_______  |____|__ \\ \n'+
 '                \\/          \\/        \\/     \\/         |__|                 \\/        \\/        \\/ \n'+
-'                                                               MEGA SDK version:  %% (83f9bbbf)    \n';
+'                                                               MEGA SDK version:  %% (6c19b841)    \n';

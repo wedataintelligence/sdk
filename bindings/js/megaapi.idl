@@ -846,6 +846,8 @@ interface MegaAccountDetails
     MegaAccountPurchase getPurchase(long i);
     long getNumTransactions();
     MegaAccountTransaction getTransaction(long i);
+
+    //[EnforceRange] attribute long long storage_max;
 };
 
 [Prefix="mega::"]

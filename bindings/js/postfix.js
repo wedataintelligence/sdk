@@ -16,5 +16,36 @@
         }
         return list;
     };
+    Module.getMegaAccountList = function getMegaAccountList(type, obj) {
+        var list = [];
+        if (typeof obj['getNum' + type + 's'] === 'function') {
+            var items = obj['getNum' + type + 's']() | 0;
+            type = 'get' + type;
+            for (var i = 0 ; i < items ; ++i ) {
+                list.push(obj[type](i));
+            }
+        }
+        return list;
+    };
+    Module.getInt64 = function getInt64(value, unsigned) {
+        var tempRet0 = Module.Runtime.getTempRet0();
+        return Module.Runtime.makeBigInt(value, tempRet0, unsigned);
+    };
+    Module.getUint64 = function getUint64(value) {
+        return Module.getInt64(value, true);
+    };
+    Module.formatBytes = function formatBytes(a) {
+        var b = ["bytes", "KB", "MB", "GB", "TB", "PB", "EB"];
+        if (a === 0) {
+            return a + " " + b[1];
+        }
+        var c = Math.floor(Math.log(a) / Math.log(1024));
+        return (a / Math.pow(1024, Math.floor(c))).toFixed(2) + " " + b[c];
+    };
+    Module.timeStampToDate = function timeStampToDate(time, iso) {
+        var date = new Date((time | 0) * 1000);
+        if (iso) date = date.toISOString();
+        return date;
+    };
     return Module;
 }));
