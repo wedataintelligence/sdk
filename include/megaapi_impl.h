@@ -1020,7 +1020,7 @@ class MegaApiImpl : public MegaApp
         void getSessionTransferURL(const char *path, MegaRequestListener *listener);
         static MegaHandle base32ToHandle(const char* base32Handle);
         static handle base64ToHandle(const char* base64Handle);
-        static char *handleToBase64(MegaHandle handle);
+        static char *handleToBase64(MegaHandle handle, int binarySize = MegaClient::NODEHANDLE);
         static char *userHandleToBase64(MegaHandle handle);
         static const char* ebcEncryptKey(const char* encryptionKey, const char* plainKey);
         void retryPendingConnections(bool disconnect = false, bool includexfers = false, MegaRequestListener* listener = NULL);

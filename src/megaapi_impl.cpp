@@ -254,9 +254,7 @@ MegaNode *MegaNodePrivate::copy()
 
 char *MegaNodePrivate::getBase64Handle()
 {
-    char *base64Handle = new char[12];
-    Base64::btoa((byte*)&(nodehandle),MegaClient::NODEHANDLE,base64Handle);
-    return base64Handle;
+    return MegaApiImpl::handleToBase64(nodehandle);
 }
 
 int MegaNodePrivate::getType()
@@ -366,8 +364,8 @@ char *MegaNodePrivate::getBase64Key()
     // the key
     if (type == FILENODE && nodekey.size() >= FILENODEKEYLENGTH)
     {
-        key = new char[FILENODEKEYLENGTH*4/3+3];
-        Base64::btoa((const byte*)nodekey.data(),FILENODEKEYLENGTH, key);
+        key = new char[FILENODEKEYLENGTH * 4 / 3 + 3];
+        Base64::btoa((const byte*)nodekey.data(), FILENODEKEYLENGTH, key);
     }
 
     return key;
@@ -799,9 +797,7 @@ char *MegaSharePrivate::getBase64Handle()
         return NULL;
     }
 
-    char *base64Handle = new char[12];
-    Base64::btoa((byte*)&(nodehandle), MegaClient::NODEHANDLE, base64Handle);
-    return base64Handle;
+    return MegaApiImpl::handleToBase64(nodehandle);
 }
 
 uint64_t MegaSharePrivate::getNodeHandle()
@@ -981,9 +977,7 @@ char *MegaTransferPrivate::getBase64NodeHandle() const
         return NULL;
     }
 
-    char *base64Handle = new char[12];
-    Base64::btoa((byte*)&(nodeHandle), MegaClient::NODEHANDLE, base64Handle);
-    return base64Handle;
+    return MegaApiImpl::handleToBase64(nodeHandle);
 }
 
 char *MegaTransferPrivate::getParentBase64Handle() const
@@ -1310,9 +1304,7 @@ char *MegaContactRequestPrivate::getBase64Handle() const
         return NULL;
     }
 
-    char *base64Handle = new char[12];
-    Base64::btoa((byte*)&(handle), MegaClient::NODEHANDLE, base64Handle);
-    return base64Handle;
+    return MegaApiImpl::handleToBase64(handle, MegaClient::PCRHANDLE);
 }
 
 char *MegaContactRequestPrivate::getSourceEmail() const
@@ -1886,10 +1878,8 @@ char *MegaRequestPrivate::getBase64NodeHandle() const
     {
         return NULL;
     }
-
-    char *base64Handle = new char[12];
-    Base64::btoa((byte*)&(nodeHandle), MegaClient::NODEHANDLE, base64Handle);
-    return base64Handle;
+    
+    return MegaApiImpl::handleToBase64(nodeHandle);
 }
 
 MegaStringListPrivate::MegaStringListPrivate()
@@ -2691,14 +2681,14 @@ handle MegaApiImpl::base64ToHandle(const char* base64Handle)
 	if(!base64Handle) return UNDEF;
 
 	handle h = 0;
-	Base64::atob(base64Handle,(byte*)&h,MegaClient::NODEHANDLE);
+	Base64::atob(base64Handle,(byte*)&h, sizeof h);
     return h;
 }
 
-char *MegaApiImpl::handleToBase64(MegaHandle handle)
+char *MegaApiImpl::handleToBase64(MegaHandle handle, int binarySize)
 {
-    char *base64Handle = new char[12];
-    Base64::btoa((byte*)&(handle),MegaClient::NODEHANDLE,base64Handle);
+    char *base64Handle = new char[binarySize * 4 / 3 + 4];
+    Base64::btoa((byte*)&(handle), binarySize, base64Handle);
     return base64Handle;
 }
 
@@ -10203,9 +10193,7 @@ char *MegaPricingPrivate::getBase64Handle(int productIndex)
 {
     if ((unsigned)productIndex < handles.size())
     {
-        char *base64Handle = new char[12];
-        Base64::btoa((byte*)&(handles[productIndex]), MegaClient::NODEHANDLE, base64Handle);
-        return base64Handle;
+        return MegaApiImpl::handleToBase64(handles[productIndex], MegaClient::PURCHASEHANDLE);
     }
 
     return NULL;
@@ -10598,10 +10586,8 @@ char *MegaAccountSessionPrivate::getBase64Handle() const
     {
         return NULL;
     }
-
-    char *base64Handle = new char[12];
-    Base64::btoa((byte*)&(session.id), MegaClient::NODEHANDLE, base64Handle);
-    return base64Handle;
+    
+    return MegaApiImpl::handleToBase64(session.id, MegaClient::SESSIONHANDLE);
 }
 
 MegaAccountSessionPrivate::MegaAccountSessionPrivate(const AccountSession *session)
