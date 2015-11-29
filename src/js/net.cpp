@@ -118,7 +118,7 @@ void JSHttpIO::onloadend(void* handle, int status, const char *data, int datalen
         httpio->lastdata = Waiter::ds;
 
         if (datalen) {
-            req->in += data;
+            req->in.assign(data, datalen);
         }
     }
 
