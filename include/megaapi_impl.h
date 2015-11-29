@@ -66,7 +66,22 @@
 namespace mega
 {
 
-#ifdef USE_QT
+#ifdef EMSCRIPTEN
+class MegaThread : public Thread
+{
+public:
+    virtual void start(void *(*start_routine)(void*), void *parameter) { };
+    virtual void join() { };
+};
+
+class MegaMutex : public Mutex
+{
+public:
+    virtual void init(bool recursive) { };
+    virtual void lock() { };
+    virtual void unlock() { };
+};
+#elif USE_QT
 typedef QtThread MegaThread;
 typedef QtMutex MegaMutex;
 #elif USE_PTHREAD
