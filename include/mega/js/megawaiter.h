@@ -27,12 +27,16 @@
 namespace mega {
 struct JsWaiter : public Waiter
 {
+    void(*userCallback)(void*);
+    void *userData;
+    
     JsWaiter();
 
     void init(dstime);
     int wait();
 
     void notify();
+    void setNotifyCallback(void(*userCallback)(void*), void* userData);
 };
 } // namespace
 

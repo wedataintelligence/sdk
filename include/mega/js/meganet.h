@@ -28,9 +28,6 @@ namespace mega {
 
 class JSHttpIO: public HttpIO
 {
-protected:
-    WAIT_CLASS* waiter;
-
 public:
     void onloadend(void*, int, const char*, int);
     void post(HttpReq*, const char* = 0, unsigned = 0);
@@ -51,6 +48,8 @@ public:
 
     JSHttpIO();
     ~JSHttpIO();
+    
+    WAIT_CLASS* waiter;
 };
 
 struct MEGA_API JSHttpContext

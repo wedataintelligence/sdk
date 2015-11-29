@@ -1269,7 +1269,10 @@ protected:
         static void *threadEntryPoint(void *param);
 
 #ifdef EMSCRIPTEN
+        static void notifyCallback(void *param);
         static void emscriptenLoop(void *param);
+        m_time_t nextExec;
+        bool notified;
 #endif
 
         static ExternalLogger *externalLogger;

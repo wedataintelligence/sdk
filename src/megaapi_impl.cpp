@@ -2506,17 +2506,37 @@ void MegaApiImpl::init(MegaApi *api, const char *appKey, MegaGfxProcessor* proce
 	threadExit = 0;
     thread.start(threadEntryPoint, this);
 #else
-    emscripten_set_main_loop_arg(MegaApiImpl::emscriptenLoop, this, 5, false);
+    notified = false;
+    nextExec = 0;
+    waiter->setNotifyCallback(MegaApiImpl::notifyCallback, this);
 #endif
 }
 
 #ifdef EMSCRIPTEN
-void MegaApiImpl::emscriptenLoop(void *param)
+void MegaApiImpl::notifyCallback(void *param)
 {
     MegaApiImpl *p = (MegaApiImpl *)param;
+    if (!p->notified)
+    {
+        p->notified = true;
+        emscripten_async_call(MegaApiImpl::emscriptenLoop, param, 0);
+    }
+}
+
+void MegaApiImpl::emscriptenLoop(void *param)
+{	
+    MegaApiImpl *p = (MegaApiImpl *)param;
+    p->notified = false;
     p->sendPendingTransfers();
     p->sendPendingRequests();
     p->client->exec();
+    p->client->wait();
+    
+    if (p->waiter->maxds != NEVER && (p->nextExec <= p->waiter->ds || (p->waiter->ds + p->waiter->maxds) < p->nextExec))
+    {
+        p->nextExec = p->waiter->ds + p->waiter->maxds;
+        emscripten_async_call(MegaApiImpl::emscriptenLoop, p, p->waiter->maxds * 100);
+    }
 }
 #endif
 

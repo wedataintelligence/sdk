@@ -37,7 +37,15 @@ extern "C" {
     }
     extern void jsnet_progress(int ctx, int loaded)
     {
-        ((mega::JSHttpContext*)&__httpctx[ctx])->postpos = loaded;
+        mega::JSHttpContext* httpctx = (mega::JSHttpContext*) &__httpctx[ctx];
+        mega::JSHttpIO* httpio = (mega::JSHttpIO*)httpctx->httpio;
+        
+        httpctx->postpos = loaded;
+        
+        if (httpio->waiter)
+        {
+            httpio->waiter->notify();
+        }
     }
 }
 
@@ -84,9 +92,7 @@ Proxy* JSHttpIO::getautoproxy()
 // ensure wakeup from JSHttpIO events
 void JSHttpIO::addevents(Waiter* cwaiter, int flags)
 {
-    // waiter = (JSWaiter*)cwaiter;
-
-    LOG_err << "TODO_0";
+    waiter = (WAIT_CLASS*)cwaiter;
 }
 
 // XHR onloadend handler
@@ -133,6 +139,11 @@ void JSHttpIO::onloadend(void* handle, int status, const char *data, int datalen
     }
 
     httpio->success = true;
+    
+    if (waiter)
+    {
+        waiter->notify();
+    }
 }
 
 // POST request to URL
@@ -173,6 +184,11 @@ void JSHttpIO::post(HttpReq* req, const char* data, unsigned len)
         req->in.clear();
         req->status = REQ_INFLIGHT;
     }
+    
+    if (waiter)
+    {
+        waiter->notify();
+    }
 }
 
 // unfortunately, WinHTTP does not allow alternating reads/writes :(
@@ -194,6 +210,12 @@ void JSHttpIO::cancel(HttpReq* req)
         req->httpiohandle = NULL;
 
         jsnet_cancel(httpctx->ctxid);
+        delete httpctx;
+        
+        if (waiter)
+        {
+            waiter->notify();
+        }
     }
 }
 

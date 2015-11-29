@@ -42,7 +42,8 @@ dstime Waiter::ds;
 
 JsWaiter::JsWaiter()
 {
-
+    userCallback = NULL;
+    userData = NULL;
 }
 
 void JsWaiter::init(dstime ds)
@@ -67,7 +68,16 @@ int JsWaiter::wait()
 
 void JsWaiter::notify()
 {
-    
+    if (userCallback)
+    {
+        (*userCallback)(userData);
+    }
+}
+
+void JsWaiter::setNotifyCallback(void(*userCallback)(void*), void* userData)
+{
+    this->userCallback = userCallback;
+    this->userData = userData;
 }
 
 } // namespace
