@@ -706,6 +706,17 @@ MEGASDK.Terminal = function (client) {
                 });
             listener.abort(null, MEGASDK.MegaError.API_OK);
         }
+        else if (cmd === 'killsession') {
+            if (argv[0] === 'all') {
+                client.killSession();
+            }
+            else if (typeof argv[0] === 'string') {
+                client.killSession(argv[0]);
+            }
+            else {
+                listener.abort();
+            }
+        }
         else if (cmd === 'retry') {
             // XXX: client->abortbackoff ??
             client.retryPendingConnections();
@@ -789,7 +800,7 @@ MEGASDK.Terminal = function (client) {
                         // "getua attrname [email]",
                         // "putua attrname [del|set string|load file]",
                         // "putbps [limit|auto|none]",
-                        // "killsession [all|sessionid]", -- TODO: killSession is missing
+                        "killsession [all|sessionid]",
                         "whoami",
                         // "passwd",
                         "retry",
@@ -845,4 +856,4 @@ var BANNER =
 '  /\\__|    |/ __ \\\\   / / __ \\_/        \\  \\___|  | \\|  |  |_> |  |   /        \\|    `   |    |  \\  \n'+
 '  \\________(____  /\\_/ (____  /_______  /\\___  |__|  |__|   __/|__|  /_______  /_______  |____|__ \\ \n'+
 '                \\/          \\/        \\/     \\/         |__|                 \\/        \\/        \\/ \n'+
-'                                                               MEGA SDK version:  %% (6c19b841)    \n';
+'                                                               MEGA SDK version:  %% (e79794aa)    \n';
