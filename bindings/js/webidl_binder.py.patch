@@ -1,0 +1,267 @@
+--- tools/webidl_binder.py.orig	2015-11-15 20:06:49 +0000
++++ tools/webidl_binder.py	2015-11-30 21:01:00 +0000
+@@ -13,6 +13,8 @@
+ sys.path.append(shared.path_from_root('third_party', 'ply'))
+ 
+ import WebIDL
++import tempfile
++from subprocess import Popen, PIPE
+ 
+ # CHECKS='FAST' will skip most argument type checks in the wrapper methods for
+ #                  performance (~3x faster than default).
+@@ -49,6 +51,7 @@
+ interfaces = {}
+ implements = {}
+ enums = {}
++consts = []
+ 
+ for thing in data:
+   if isinstance(thing, WebIDL.IDLInterface):
+@@ -73,14 +76,25 @@
+ extern "C" {
+ ''']
+ 
++mid_js += ['''
++function define(k,v) {
++  Object.defineProperty(Module, k, { value: v });
++}
++function freeze(o) {
++  Object.freeze(o);
++}
++''']
++
+ def emit_constructor(name):
+   global mid_js
++  global consts
++  consts += [name]
+   mid_js += [r'''%s.prototype = %s;
+ %s.prototype.constructor = %s;
+ %s.prototype.__class__ = %s;
+ %s.__cache__ = {};
+-Module['%s'] = %s;
+-''' % (name, 'Object.create(%s.prototype)' % (implements[name][0] if implements.get(name) else 'WrapperObject'), name, name, name, name, name, name, name)]
++define('%s', %s);
++''' % (name, 'Object.create(%s.prototype)' % (name if implements.get(name) else 'WrapperObject'), name, name, name, name, name, name, name)]
+ 
+ 
+ mid_js += ['''
+@@ -96,7 +110,7 @@
+ function getCache(__class__) {
+   return (__class__ || WrapperObject).__cache__;
+ }
+-Module['getCache'] = getCache;
++define('getCache', getCache);
+ 
+ function wrapPointer(ptr, __class__) {
+   var cache = getCache(__class__);
+@@ -106,14 +120,14 @@
+   ret.ptr = ptr;
+   return cache[ptr] = ret;
+ }
+-Module['wrapPointer'] = wrapPointer;
++define('wrapPointer', wrapPointer);
+ 
+ function castObject(obj, __class__) {
+   return wrapPointer(obj.ptr, __class__);
+ }
+-Module['castObject'] = castObject;
++define('castObject', castObject);
+ 
+-Module['NULL'] = wrapPointer(0);
++define('NULL', wrapPointer(0));
+ 
+ function destroy(obj) {
+   if (!obj['__destroy__']) throw 'Error: Cannot destroy object. (Did you create it yourself?)';
+@@ -121,22 +135,22 @@
+   // Remove from cache, so the object can be GC'd and refs added onto it released
+   delete getCache(obj.__class__)[obj.ptr];
+ }
+-Module['destroy'] = destroy;
++define('destroy', destroy);
+ 
+ function compare(obj1, obj2) {
+   return obj1.ptr === obj2.ptr;
+ }
+-Module['compare'] = compare;
++define('compare', compare);
+ 
+ function getPointer(obj) {
+   return obj.ptr;
+ }
+-Module['getPointer'] = getPointer;
++define('getPointer', getPointer);
+ 
+ function getClass(obj) {
+   return obj.__class__;
+ }
+-Module['getClass'] = getClass;
++define('getClass', getClass);
+ 
+ // Converts a value into a C-style string, storing it in temporary space
+ 
+@@ -252,7 +266,7 @@
+   return ''
+ 
+ def type_to_cdec(raw):
+-  name = ret = type_to_c(raw.type.name, non_pointing=True)
++  name = ret = type_to_c(raw.type.name, non_pointing=False)
+   if raw.getExtendedAttribute('Const'): ret = 'const ' + ret
+   if name not in interfaces: return ret
+   if raw.getExtendedAttribute('Ref'):
+@@ -443,9 +457,9 @@
+ 
+         js_impl_methods += [r'''  %s %s(%s) {
+     %sEM_ASM_%s({
+-      var self = Module['getCache'](Module['%s'])[$0];
+-      if (!self.hasOwnProperty('%s')) throw 'a JSImplementation must implement all functions, you forgot %s::%s.';
+-      %sself['%s'](%s)%s;
++      var self = getCache(%s)[$0];
++      /*if (!self.hasOwnProperty('%s')) throw 'a JSImplementation must implement all functions, you forgot %s::%s.';*/
++      %sself.%s(%s)%s;
+     }, (int)this%s);
+   }''' % (c_return_type, func_name, dec_args,
+           basic_return, 'INT' if c_return_type not in C_FLOATS else 'DOUBLE',
+@@ -453,7 +467,7 @@
+           func_name, class_name, func_name,
+           return_prefix,
+           func_name,
+-          ','.join(['$%d' % i for i in range(1, max_args + 1)]),
++          ','.join(['wrapPointer($%d, %s)' % (i, raw[i-1].type.name) for i in range(1, max_args + 1)]),
+           return_postfix,
+           (', ' if js_call_args else '') + js_call_args)]
+ 
+@@ -510,7 +524,8 @@
+       seen_constructor = True
+       break
+   if not seen_constructor:
+-    mid_js += ['function %s() { throw "cannot construct a %s, no constructor in IDL" }\n' % (name, name)]
++    # mid_js += ['function %s() { throw "cannot construct a %s, no constructor in IDL" }\n' % (name, name)]
++    mid_js += ['function %s() { throw -112 }\n' % name]
+     emit_constructor(name)
+ 
+   for m in interface.members:
+@@ -527,7 +542,7 @@
+         continue
+     if not constructor:
+       mid_js += [r'''
+-%s.prototype['%s'] = %s.prototype.%s = ''' % (name, m.identifier.name, name, m.identifier.name)]
++%s.prototype.%s = ''' % (name, m.identifier.name)]
+     sigs = {}
+     return_type = None
+     for ret, args in m.signatures():
+@@ -573,7 +588,7 @@
+ 
+     get_name = 'get_' + attr
+     mid_js += [r'''
+-  %s.prototype['%s'] = %s.prototype.%s = ''' % (name, get_name, name, get_name)]
++  %s.prototype.%s = ''' % (name, get_name)]
+     render_function(name,
+                     get_name, get_sigs, m.type.name,
+                     None,
+@@ -587,7 +602,7 @@
+     if not m.readonly:
+       set_name = 'set_' + attr
+       mid_js += [r'''
+-    %s.prototype['%s'] = %s.prototype.%s = ''' % (name, set_name, name, set_name)]
++    %s.prototype.%s = ''' % (name, set_name)]
+       render_function(name,
+                       set_name, set_sigs, 'Void',
+                       None,
+@@ -600,7 +615,7 @@
+ 
+   if not interface.getExtendedAttribute('NoDelete'):
+     mid_js += [r'''
+-  %s.prototype['__destroy__'] = %s.prototype.__destroy__ = ''' % (name, name)]
++  %s.prototype.__destroy__ = ''' % name]
+     render_function(name,
+                     '__destroy__', { 0: [] }, 'Void',
+                     None,
+@@ -621,41 +636,71 @@
+ ''' % (name, type_to_c(js_impl, non_pointing=True), '\n'.join(js_impl_methods))]
+ 
+ deferred_js = []
++tocompile_c = []
+ 
+ for name, enum in enums.iteritems():
+-  mid_c += ['\n// ' + name + '\n']
+-  deferred_js += ['\n', '// ' + name + '\n']
++  tocompile_c += ['\n', '// ' + name + '\n']
+   for value in enum.values():
+     function_id = "%s_%s" % (name, value.split('::')[-1])
+-    mid_c += [r'''%s EMSCRIPTEN_KEEPALIVE emscripten_enum_%s() {
+-  return %s;
+-}
+-''' % (name, function_id, value)]
+     symbols = value.split('::')
++    while len(symbols) > 2:
++      symbols.pop(0);
++
+     if len(symbols) == 1:
+       identifier = symbols[0]
+-      deferred_js += ["Module['%s'] = _emscripten_enum_%s();\n" % (identifier, function_id)]
++      tocompile_c += ["printf(\"Module.%s = %%d;\\n\", %s);\n" % (identifier, value)]
+     elif len(symbols) == 2:
+       [namespace, identifier] = symbols
+       if namespace in interfaces:
+         # namespace is a class
+-        deferred_js += ["Module['%s']['%s'] = _emscripten_enum_%s();\n" % \
+-                  (namespace, identifier, function_id)]
++        tocompile_c += ["printf(\"%s.%s = %%d;\\n\", %s);\n" % \
++                  (namespace, identifier, value)]
+       else:
+         # namespace is a namespace, so the enums get collapsed into the top level namespace.
+-        deferred_js += ["Module['%s'] = _emscripten_enum_%s();\n" % (identifier, function_id)]
++        tocompile_c += ["printf(\"Module.%s = %%d;\\n\", %s);\n" % (identifier, value)]
+     else:
+       raise Exception("Illegal enum value %s" % value)
+ 
++tocompile_c = '''
++#include <megaapi.h>
++#include <stdio.h>
++
++int main() {
++    %s
++    return 0;
++}
++''' % '\n    '.join(tocompile_c)
++
++temp = tempfile.mkstemp('.cpp');
++
++c = open(temp[1], 'w+')
++c.write(tocompile_c)
++c.close()
++
++process = Popen(["g++", temp[1], "-o", temp[1] + ".exe", "-Iinclude"], stdout=PIPE)
++(output, err) = process.communicate()
++exit_code = process.wait()
++
++if (exit_code):
++    sys.exit(1)
++
++process = Popen([temp[1] + ".exe"], stdout=PIPE)
++(output, err) = process.communicate()
++exit_code = process.wait()
++
++if (exit_code):
++    sys.exit(1)
++
++deferred_js += [output]
++
++consts = set(consts)
++for x in consts:
++    deferred_js += ["freeze(%s);" % x]
++
+ mid_c += ['\n}\n\n']
+ mid_js += ['''
+-(function() {
+-  function setupEnums() {
+-    %s
+-  }
+-  if (Module['calledRun']) setupEnums();
+-  else addOnPreMain(setupEnums);
+-})();
++// Setup enums
++%s
+ ''' % '\n    '.join(deferred_js)]
+ 
+ # Write
