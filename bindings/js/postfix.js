@@ -1,3 +1,32 @@
+    Module.randomDevice = (function() {
+        var device;
+        if (typeof crypto !== "undefined") {
+            var randomBuffer;
+            device = function(seedSize) {
+                if (!randomBuffer || seedSize > randomBuffer.byteLength) {
+                    randomBuffer = new Uint8Array(seedSize+1);
+                    crypto.getRandomValues(randomBuffer);
+                }
+                var b = randomBuffer[seedSize];
+                if (seedSize < 2) {
+                    randomBuffer = null;
+                }
+                return b;
+            };
+        }
+        else if (ENVIRONMENT_IS_NODE) {
+            device = function() {
+                return require("crypto").randomBytes(1)[0];
+            };
+        }
+        else {
+            Module.printErr('Using weak random number generator.');
+            device = function() {
+                return Math.random() * 256 | 0;
+            };
+        }
+        return device;
+    })();
     Module.isMyObject = function isMyObject(obj) {
         return (obj && typeof obj === 'object' && typeof obj.ptr === 'number');
     };

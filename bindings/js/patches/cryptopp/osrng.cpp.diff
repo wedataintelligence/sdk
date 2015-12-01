@@ -1,0 +1,29 @@
+--- osrng.cpp.orig	Wed Feb 20 14:30:52 2013
++++ osrng.cpp	Tue Dec  1 14:10:21 2015
+@@ -187,6 +187,26 @@ void AutoSeededRandomPool::Reseed(bool b
+ 
+ NAMESPACE_END
+ 
++#elif defined(EMSCRIPTEN)
++
++extern "C" {
++	extern int cryptopp_rngseed(unsigned int seedSize);
++}
++
++NAMESPACE_BEGIN(CryptoPP)
++
++void AutoSeededRandomPool::Reseed(bool blocking, unsigned int seedSize)
++{
++	SecByteBlock seed(seedSize);
++	byte *tmp = (byte *)seed;
++	while (seedSize) {
++		*tmp++ = cryptopp_rngseed(seedSize--);
++	}
++	IncorporateEntropy(seed, seedSize);
++}
++
++NAMESPACE_END
++
+ #endif
+ 
+ #endif

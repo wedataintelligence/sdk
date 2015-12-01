@@ -74,5 +74,8 @@ mergeInto(LibraryManager.library, {
         }
 
         return ctx;
+    },
+    cryptopp_rngseed: function(seedSize) {
+        return Module.randomDevice(seedSize);
     }
 });

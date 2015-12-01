@@ -1,0 +1,25 @@
+--- osrng.h.orig	Mon Aug  9 12:22:42 2010
++++ osrng.h	Tue Dec  1 14:16:11 2015
+@@ -151,6 +151,22 @@ typedef AutoSeededRandomPool DefaultAuto
+ 
+ NAMESPACE_END
+ 
++#elif defined(EMSCRIPTEN)
++#include "randpool.h"
++
++NAMESPACE_BEGIN(CryptoPP)
++//! Automaticly Seeded Randomness Pool
++/*! This class seeds itself using an operating system provided RNG. */
++class CRYPTOPP_DLL AutoSeededRandomPool : public RandomPool
++{
++public:
++	//! use blocking to choose seeding with BlockingRng or NonblockingRng. the parameter is ignored if only one of these is available
++	explicit AutoSeededRandomPool(bool blocking = false, unsigned int seedSize = 32)
++		{Reseed(blocking, seedSize);}
++	void Reseed(bool blocking = false, unsigned int seedSize = 32);
++};
++NAMESPACE_END
++
+ #endif
+ 
+ #endif
