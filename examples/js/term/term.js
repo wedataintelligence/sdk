@@ -697,6 +697,19 @@ MEGASDK.Terminal = function (client) {
                 listener.abort();
             }
         }
+        else if (cmd === 'passwd') {
+            if (!client.isLoggedIn() || argv.length !== 3) {
+                assert(false, 'Invalid operation.');
+                listener.abort();
+            }
+            else if (argv[1] !== argv[2]) {
+                assert(false, 'These passwords does not match.');
+                listener.abort();
+            }
+            else {
+                client.changePassword( argv[0], argv[1]);
+            }
+        }
         else if (cmd === 'retry') {
             // XXX: client->abortbackoff ??
             client.retryPendingConnections();
@@ -782,7 +795,7 @@ MEGASDK.Terminal = function (client) {
                         // "putbps [limit|auto|none]",
                         "killsession [all|sessionid]",
                         "whoami",
-                        // "passwd",
+                        "passwd oldpw newpw confirmpw",
                         "retry",
                         "recon",
                         "reload",
