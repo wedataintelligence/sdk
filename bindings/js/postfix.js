@@ -27,6 +27,23 @@
         }
         return list;
     };
+    Module.getTreeInfo = function getTreeInfo(api, node) {
+        var info = { bytes: 0, files: 0, folders: 0 };
+        var proc = new MegaTreeProcessorInterface();
+        proc.processMegaNode = function(node) {
+            if (node.isFile()) {
+                info.files++;
+                info.bytes += Module.getUint64(node.getSize());
+            }
+            else {
+                info.folders++;
+            }
+            return true;
+        };
+        api.processMegaTree(node, proc, true);
+        info.folders--;
+        return info;
+    };
     Module.getInt64 = function getInt64(value, unsigned) {
         var tempRet0 = Module.Runtime.getTempRet0();
         return Module.Runtime.makeBigInt(value, tempRet0, unsigned);
