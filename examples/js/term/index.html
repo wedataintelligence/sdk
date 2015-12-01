@@ -61,6 +61,7 @@
             console.debug('onRuntimeInitialized', client);
             window.api = client;
             MEGASDK.Terminal(client);
+            MEGASDK.memoryInitializerRequest = null;
         }
       };
       window.onerror = function(event) {

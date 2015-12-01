@@ -170,28 +170,6 @@ function dumptree(api, term, n, recurse, depth)
     }
 }
 
-function MegaListener(aListener) {
-    var methods = [
-        "onRequestStart", "onRequestFinish", "onRequestUpdate", "onRequestTemporaryError",
-        "onTransferStart", "onTransferFinish", "onTransferUpdate", "onTransferTemporaryError",
-        "onUsersUpdate", "onNodesUpdate", "onAccountUpdate",
-        "onContactRequestsUpdate", "onReloadNeeded"
-    ];
-
-    var listener = new MEGASDK.MegaListenerInterface();
-
-    for (var method in methods) {
-        if (methods.hasOwnProperty(method)) {
-            method = methods[method];
-            listener[method] = aListener[method] || (function dummyMegaListenerMethod(){});
-        }
-    }
-
-    methods = undefined;
-
-    return listener;
-}
-
 var cwd = false;
 var debug = false;
 var quiet = false;
@@ -342,6 +320,7 @@ MEGASDK.Terminal = function (client) {
         }
         else if (cmd === 'debug') {
             debug = !debug;
+            listener.abort(null, MEGASDK.MegaError.API_OK);
         }
         else if (cmd === 'version') {
             term.echo("MEGA SDK version: " + client.getVersion());
@@ -384,7 +363,7 @@ MEGASDK.Terminal = function (client) {
         }
         else if (cmd === 'whoami') {
             listener.pause();
-            client.getUserData(MegaListener({
+            client.getUserData(MEGASDK.getMegaListener({
                 onRequestFinish: function(api, request, error) {
                     assert(client === api, 'getUserData: Unexpected MegaApi instance');
                     assert(request.getType() === MEGASDK.MegaRequest.TYPE_GET_USER_DATA,
@@ -397,7 +376,7 @@ MEGASDK.Terminal = function (client) {
                         // term.echo("[[;#C6C7C6;]Account PRIVKEY:] " + request.getPrivateKey());
 
                         quiet = true;
-                        client.getExtendedAccountDetails(true, true, true, MegaListener({
+                        client.getExtendedAccountDetails(true, true, true, MEGASDK.getMegaListener({
                             onRequestFinish: function(api, request, error) {
                                 if (error.getErrorCode() === MEGASDK.MegaError.API_OK) {
                                     var data = request.getMegaAccountDetails();
@@ -560,7 +539,7 @@ MEGASDK.Terminal = function (client) {
                     ets = argv[1];
                 }
 
-                client.exportNode(node, ets || undefined, MegaListener({
+                client.exportNode(node, ets || undefined, MEGASDK.getMegaListener({
                     onRequestFinish: function(api, request, error) {
                         if (error.getErrorCode() === MEGASDK.MegaError.API_OK) {
                             term.echo("Exported link: " + request.getLink());
@@ -676,7 +655,7 @@ MEGASDK.Terminal = function (client) {
                         }
                     }
 
-                    client.share(node, argv[1], a, MegaListener({
+                    client.share(node, argv[1], a, MEGASDK.getMegaListener({
                         onRequestFinish: function(api, request, error) {
                             assert(error.getErrorCode() === MEGASDK.MegaError.API_OK,
                                 'Error sharing folder: ' + argv[0]);

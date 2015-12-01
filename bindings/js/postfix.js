@@ -44,6 +44,25 @@
         info.folders--;
         return info;
     };
+    Module.getMegaListener = function getMegaListener(obj) {
+        var fn = [
+            "onRequestStart", "onRequestFinish", "onRequestUpdate", "onRequestTemporaryError",
+            "onTransferStart", "onTransferFinish", "onTransferUpdate", "onTransferTemporaryError",
+            "onUsersUpdate", "onNodesUpdate", "onAccountUpdate",
+            "onContactRequestsUpdate", "onReloadNeeded"
+        ];
+        var l = new MegaListenerInterface();
+
+        for (var m in fn) {
+            if (fn.hasOwnProperty(m)) {
+                m = fn[m];
+                l[m] = obj[m] || (function(){});
+            }
+        }
+        fn = obj = undefined;
+
+        return l;
+    };
     Module.getInt64 = function getInt64(value, unsigned) {
         var tempRet0 = Module.Runtime.getTempRet0();
         return Module.Runtime.makeBigInt(value, tempRet0, unsigned);
