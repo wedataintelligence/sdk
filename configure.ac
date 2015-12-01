@@ -23,9 +23,16 @@
 # Process this file with autoconf to produce a configure script.
 
 m4_include([m4/ax_prog_doxygen.m4])
-m4_include([m4/curlchk.m4])
 m4_include([m4/ax_check_compile_flag.m4])
 m4_include([m4/ax_check_link_flag.m4])
+m4_include([m4/megasdk_cryptopp.m4])
+m4_include([m4/megasdk_sodium.m4])
+m4_include([m4/megasdk_zlib.m4])
+m4_include([m4/megasdk_freeimage.m4])
+m4_include([m4/megasdk_db.m4])
+m4_include([m4/megasdk_ssl.m4])
+m4_include([m4/megasdk_cares.m4])
+m4_include([m4/megasdk_curl.m4])
 
 AC_PREREQ([2.61])
 
@@ -159,7 +166,6 @@ AX_CHECK_COMPILE_FLAG([-fPIC], [
   )
 ])
 
-
 AM_CONDITIONAL(ENABLE_STATIC, test x$enable_static = xyes)
 AC_SUBST(ENABLE_STATIC)
 
@@ -262,232 +268,59 @@ if test x$enable_megaapi = xyes; then
 fi
 AM_CONDITIONAL([BUILD_MEGAAPI], [test "$enable_megaapi" = "yes"])
 
+# Emscripten
+AC_MSG_CHECKING([if building javascript bindings])
+AC_ARG_ENABLE(javascript,
+    AS_HELP_STRING([--enable-javascript], [build javascript bindings]),
+    [], [enable_javascript=yes])
+AC_MSG_RESULT([$enable_javascript])
 
-SAVE_LDFLAGS=$LDFLAGS
-SAVE_CXXFLAGS=$CXXFLAGS
-SAVE_CPPFLAGS=$CPPFLAGS
+# dependencies
+SDK_CXXFLAGS=""
+SDK_CPPFLAGS=""
+SDK_LDFLAGS=""
+SDK_LIBS=""
 
-#libcryptopp
-CRYPTO_LIBS="-lcryptopp"
-AC_MSG_CHECKING(for libcryptopp)
-cryptopp=false
-AC_ARG_WITH(cryptopp,
-  AS_HELP_STRING(--with-cryptopp=PATH, base of libcrypto installation),
-  [
-   case $with_cryptopp in
-   no)
-    cryptopp=false
-     ;;
-   yes)
-    AC_CHECK_HEADERS([cryptopp/cryptlib.h],, [
-        AC_MSG_ERROR([cryptopp/cryptlib.h header not found or not usable])
-    ])
-    AC_CHECK_LIB(cryptopp, [main], [CRYPTO_LIBS="-lcryptopp"],[
-            AC_MSG_ERROR([Could not find libcryptopp])
-    ])
-    cryptopp=true
-     ;;
-   *)
+# default values
+check_cryptopp=true
+check_sodium=false
+check_zlib=true
+check_freeimage=true
+check_db=true
+check_ssl=true
+check_cares=true
+check_curl=true
+check_examples=true
 
-    # determine if library is installed
-    if test -d "$with_cryptopp/lib"; then
-        LDFLAGS="-L$with_cryptopp/lib $LDFLAGS"
-        CXXFLAGS="-I$with_cryptopp/include $CXXFLAGS"
-        CPPFLAGS="-I$with_cryptopp/include $CPPFLAGS"
-
-        AC_CHECK_HEADERS(cryptopp/cryptlib.h,
-         CRYPTO_CXXFLAGS="-I$with_cryptopp/include"
-         CRYPTO_CPPFLAGS="-I$with_cryptopp/include"
-         CRYPTO_LDFLAGS="-L$with_cryptopp/lib",
-         AC_MSG_ERROR([cryptopp/cryptlib.h header not found or not usable])
-         )
-    # assume we are using crypto source directory
-    else
-        LDFLAGS="-L$with_cryptopp/cryptopp $LDFLAGS"
-        CXXFLAGS="-I$with_cryptopp $CXXFLAGS"
-        CPPFLAGS="-I$with_cryptopp $CPPFLAGS"
-
-        AC_CHECK_HEADERS(cryptopp/cryptlib.h,
-         CRYPTO_CXXFLAGS="-I$with_cryptopp"
-         CRYPTO_CPPFLAGS="-I$with_cryptopp"
-         CRYPTO_LDFLAGS="-L$with_cryptopp/cryptopp",
-         AC_MSG_ERROR([cryptopp/cryptlib.h header not found or not usable])
-         )
-    fi
-
-    AC_CHECK_LIB(cryptopp, [main], [CRYPTO_LIBS="-lcryptopp"],[
-            AC_MSG_ERROR([Could not find libcryptopp])
-    ])
-
-    cryptopp=true
-
-    #restore
-    LDFLAGS=$SAVE_LDFLAGS
-    CXXFLAGS=$SAVE_CXXFLAGS
-    CPPFLAGS=$SAVE_CPPFLAGS
-    ;;
-   esac
-  ],
-  [AC_MSG_RESULT([--with-cryptopp not specified])
-    AC_CHECK_HEADERS([cryptopp/cryptlib.h],, [
-        AC_MSG_ERROR([cryptopp/cryptlib.h header not found or not usable])
-    ])
-    AC_CHECK_LIB(cryptopp, [main], [CRYPTO_LIBS="-lcryptopp"],[
-            AC_MSG_ERROR([Could not find libcryptopp])
-    ])
-  ])
-AC_SUBST(CRYPTO_CXXFLAGS)
-AC_SUBST(CRYPTO_CPPFLAGS)
-AC_SUBST(CRYPTO_LDFLAGS)
-AC_SUBST(CRYPTO_LIBS)
-AC_DEFINE(USE_CRYPTOPP, [1], [Define to use libcryptopp])
-
-#libsodium
-AC_MSG_CHECKING(for libsodium)
-sodium=false
-AC_ARG_WITH(sodium,
-  AS_HELP_STRING(--with-sodium=PATH, base of libsodium installation),
-  [
-   case $with_sodium in
-   no)
-    sodium=false
-     ;;
-   yes)
-    AC_CHECK_HEADERS([sodium/core.h],, [
-        AC_MSG_ERROR([sodium/core.h header not found or not usable])
-    ])
-    AC_CHECK_LIB(sodium, [sodium_init], [SODIUM_LIBS="-lsodium"],[
-            AC_MSG_ERROR([Could not find libsodium])
-    ])
-    sodium=true
-     ;;
-   *)
-
-    # determine if library is installed
-    if test -d "$with_sodium/lib"; then
-        LDFLAGS="-L$with_sodium/lib $LDFLAGS"
-        CXXFLAGS="-I$with_sodium/include $CXXFLAGS"
-        CPPFLAGS="-I$with_sodium/include $CPPFLAGS"
-
-        AC_CHECK_HEADERS(sodium/core.h,
-         SODIUM_CXXFLAGS="-I$with_sodium/include"
-         SODIUM_CPPFLAGS="-I$with_sodium/include"
-         SODIUM_LDFLAGS="-L$with_sodium/lib",
-         AC_MSG_ERROR([sodium/sodium.h header not found or not usable])
-         )
-    # assume we are using sodium source directory
-    else
-        LDFLAGS="-L$with_sodium/src/libsodium/.libs $LDFLAGS"
-        CXXFLAGS="-I$with_sodium/src/libsodium/include $CXXFLAGS"
-        CPPFLAGS="-I$with_sodium/src/libsodium/include $CPPFLAGS"
-
-        AC_CHECK_HEADERS(sodium/core.h,
-         SODIUM_CXXFLAGS="-I$with_sodium/src/libsodium/include"
-         SODIUM_CPPFLAGS="-I$with_sodium/src/libsodium/include"
-         SODIUM_LDFLAGS="-L$with_sodium/src/libsodium/.libs",
-         AC_MSG_ERROR([sodium/core.h header not found or not usable])
-         )
-    fi
-
-    AC_CHECK_LIB(sodium, [sodium_init], [SODIUM_LIBS="-lsodium"],[
-            AC_MSG_ERROR([Could not find libsodium])
-    ])
-
-    sodium=true
-
-    #restore
-    LDFLAGS=$SAVE_LDFLAGS
-    CXXFLAGS=$SAVE_CXXFLAGS
-    CPPFLAGS=$SAVE_CPPFLAGS
-    ;;
-   esac
-  ],
-  [AC_MSG_RESULT([--with-sodium not specified])
-    AC_CHECK_HEADERS([sodium/core.h], [sodium=true], [])
-    AC_CHECK_LIB(sodium, [sodium_init], [SODIUM_LIBS="-lsodium"],[])
-    ]
-  )
-AC_SUBST(SODIUM_CXXFLAGS)
-AC_SUBST(SODIUM_CPPFLAGS)
-AC_SUBST(SODIUM_LDFLAGS)
-AC_SUBST(SODIUM_LIBS)
-
-if test "x$sodium" = "xtrue" ; then
-    AC_DEFINE(USE_SODIUM, [1], [Define to use libsodium])
+# disable cURL on Windows platform
+if test "x$WIN32" = "xyes" ; then
+    check_ssl=false
+    check_cares=false
+    check_curl=false
 fi
-AM_CONDITIONAL([USE_SODIUM], [test "x$sodium" = "xtrue"])
 
-#
-# Zlib
-#
+# disable for dependency checking when JS bindings is enabled
+if test "x$enable_javascript" = "xyes" ; then
+    check_zlib=false
+    check_db=false
+    check_ssl=false
+    check_cares=false
+    check_curl=false
+    check_freeimage=false
+    check_examples=false
+fi
 
-#zlib
-AC_MSG_CHECKING(for zlib)
-zlib=false
+# dependencies checking
+MEGASDK_CHECK_CRYPTOPP
+MEGASDK_CHECK_SODIUM
+MEGASDK_CHECK_ZLIB
+MEGASDK_CHECK_FREEIMAGE
+MEGASDK_CHECK_DB
+MEGASDK_CHECK_SSL
+MEGASDK_CHECK_CARES
+MEGASDK_CHECK_CURL
+MEGASDK_CHECK_EXAMPLES
 
-
-#
-# ** DB layer **
-#
-
-# SQLite3
-sqlite=false
-
-
-# Berkeley DB
-db=false
-AC_MSG_CHECKING(for Berkeley DB)
-AC_ARG_WITH(db,
-  AS_HELP_STRING(--with-db=PATH, base of Berkeley DB installation),
-  [AC_MSG_RESULT($with_db)
-   case $with_db in
-   no)
-     db=false
-     ;;
-   yes)
-    AC_CHECK_HEADERS([db_cxx.h],, [
-        AC_MSG_ERROR([db_cxx.h header not found or not usable])
-    ])
-
-    AC_CHECK_LIB(db_cxx, [open], [DB_LIBS="-ldb_cxx"],[
-            AC_MSG_ERROR([Could not find libdb_cxx])
-    ])
-    AC_SUBST(DB_LIBS)
-    db=true
-     ;;
-   *)
-    # set temp variables
-    LDFLAGS="-L$with_db/lib $LDFLAGS"
-    CXXFLAGS="-I$with_db/include $CXXFLAGS"
-
-    AC_CHECK_HEADERS(db_cxx.h,
-     DB_LDFLAGS="-L$with_db/lib"
-     DB_CXXFLAGS="-I$with_db/include",
-     AC_MSG_ERROR([db_cxx.h header not found or not usable])
-     )
-    AC_CHECK_LIB(db_cxx, [open], [DB_LIBS="-ldb_cxx"],[
-            AC_MSG_ERROR([Could not find libdb_cxx])
-    ])
-    AC_SUBST(DB_LIBS)
-    db=true
-
-    #restore
-    LDFLAGS=$SAVE_LDFLAGS
-    CXXFLAGS=$SAVE_CXXFLAGS
-    ;;
-   esac
-  ],
-  [AC_MSG_RESULT([--with-db not specified])]
-  )
-AM_CONDITIONAL(USE_DB, test "x$db = xtrue")
-AC_SUBST(DB_CXXFLAGS)
-AC_SUBST(DB_LDFLAGS)
-
-#
-# ** Posix dependent libraries **
-#
-openssl=false
-cares=false
 
 # determine platform include path
 if test "x$WIN32" = "xyes" ; then
@@ -497,221 +330,6 @@ else
 fi
 AC_SUBST(platform_include)
 
-# Examples
-AC_MSG_CHECKING([if building example applications])
-AC_ARG_ENABLE(examples,
-    AS_HELP_STRING([--enable-examples], [build example applications]),
-    [], [enable_examples=yes])
-AM_CONDITIONAL([BUILD_EXAMPLES], [test "$enable_examples" = "yes"])
-AC_MSG_RESULT([$enable_examples])
-
-# FreeImage
-freeimage=false
-AM_CONDITIONAL([USE_FREEIMAGE], [test "x$freeimage" = "xtrue"])
-
-USE_FUSE=0
-# if Examples are enables, check for specific libraries
-if test "x$enable_examples" = "xyes" ; then
-    #termcap
-    AC_MSG_CHECKING(for termcap)
-    AC_ARG_WITH(termcap,
-      AS_HELP_STRING(--with-termcap=PATH, base of termcap installation),
-      [AC_MSG_RESULT($with_termcap)
-       case $with_termcap in
-       no)
-         ;;
-       yes)
-        AC_CHECK_LIB([termcap], [tputs], [TERMCAP_LIBS="-ltermcap"],
-            [AC_MSG_NOTICE([termcap library not found or not usable.])]
-        )
-        ;;
-       *)
-
-        # determine if library is installed
-        if test -d "$with_termcap/lib"; then
-            LDFLAGS="-L$with_termcap/lib $LDFLAGS"
-            CXXFLAGS="-I$with_termcap/include $CXXFLAGS"
-            CPPFLAGS="-I$with_termcap/include $CPPFLAGS"
-
-            AC_CHECK_HEADERS([termcap.h],[
-                TERMCAP_LDFLAGS="-L$with_termcap/lib"
-                TERMCAP_CXXFLAGS="-I$with_termcap/include"
-                TERMCAP_CPPFLAGS="-I$with_termcap/include"],
-                AC_MSG_NOTICE([termcap.h header not found or not usable])
-            )
-        else
-            LDFLAGS="-L$with_termcap $LDFLAGS"
-            CXXFLAGS="-I$with_termcap $CXXFLAGS"
-            CPPFLAGS="-I$with_termcap $CPPFLAGS"
-
-            AC_CHECK_HEADERS([termcap.h],[
-                TERMCAP_LDFLAGS="-L$with_termcap"
-                TERMCAP_CXXFLAGS="-I$with_termcap"
-                TERMCAP_CPPFLAGS="-I$with_termcap"],
-                AC_MSG_NOTICE([termcap.h header not found or not usable])
-            )
-        fi
-
-        AC_CHECK_LIB([termcap], [tputs], [TERMCAP_LIBS="-ltermcap"], [
-            AC_MSG_NOTICE([termcap library not found or not usable.])])
-
-        #restore
-        LDFLAGS=$SAVE_LDFLAGS
-        CXXFLAGS=$SAVE_CXXFLAGS
-        CPPFLAGS=$SAVE_CPPFLAGS
-
-        ;;
-       esac
-      ],
-      [AC_MSG_RESULT([--with-termcap not specified])
-        AC_CHECK_LIB([termcap], [tputs], [TERMCAP_LIBS="-ltermcap"],
-            [AC_MSG_NOTICE([termcap library not found or not usable.])]
-        )
-      ]
-    )
-    AC_SUBST(TERMCAP_LDFLAGS)
-    AC_SUBST(TERMCAP_LIBS)
-    AC_SUBST(TERMCAP_CXXFLAGS)
-    AC_SUBST(TERMCAP_CPPFLAGS)
-
-      # ReadLine
-    AC_MSG_CHECKING(for Readline)
-    AC_ARG_WITH(readline,
-      AS_HELP_STRING(--with-readline=PATH, base of Readline installation),
-      [AC_MSG_RESULT($with_readline)
-       case $with_readline in
-       no)
-        AC_MSG_ERROR([readline library is required for the sample client.])
-         ;;
-       yes)
-        AC_CHECK_HEADERS([readline/readline.h],, [
-            AC_MSG_ERROR([readline/readline.h header not found or not usable])
-        ])
-        # readline requires termcap (or ncurses)
-        SAVE_LIBS=$LIBS
-        LIBS="$TERMCAP_LIBS $LIBS"
-        AC_CHECK_LIB([readline], [rl_save_prompt], [RL_LIBS="-lreadline"], [
-            AC_MSG_ERROR([readline library is required for the sample client.])])
-        LIBS=$SAVE_LIBS
-         ;;
-       *)
-
-        # determine if library is installed
-        if test -d "$with_readline/lib"; then
-            LDFLAGS="-L$with_readline/lib $LDFLAGS"
-            CXXFLAGS="-I$with_readline/include $CXXFLAGS"
-            CPPFLAGS="-I$with_readline/include $CPPFLAGS"
-            AC_CHECK_HEADERS([readline/readline.h], [
-             RL_LDFLAGS="-L$with_readline/lib "
-             RL_CXXFLAGS="-I$with_readline/include "],
-             AC_MSG_ERROR([readline/readline.h header not found or not usable])
-            )
-        else
-            LDFLAGS="-L$with_readline $LDFLAGS"
-            CXXFLAGS="-I$with_readline $CXXFLAGS"
-            CPPFLAGS="-I$with_readline $CPPFLAGS"
-            AC_CHECK_HEADERS([readline/readline.h], [
-             RL_LDFLAGS="-L$with_readline"
-             RL_CXXFLAGS="-I$with_readline"],
-             AC_MSG_ERROR([readline/readline.h header not found or not usable])
-            )
-        fi
-
-        # readline requires termcap (or ncurses)
-        SAVE_LIBS=$LIBS
-        LIBS="$TERMCAP_LIBS $LIBS"
-        AC_CHECK_LIB([readline], [rl_save_prompt], [RL_LIBS="-lreadline"], [
-            AC_MSG_ERROR([readline library is required for the sample client.])])
-        LIBS=$SAVE_LIBS
-
-        #restore
-        LDFLAGS=$SAVE_LDFLAGS
-        CXXFLAGS=$SAVE_CXXFLAGS
-        CPPFLAGS=$SAVE_CPPFLAGS
-        ;;
-       esac
-      ],
-      [AC_MSG_RESULT([--with-readline not specified])
-        AC_CHECK_HEADERS([readline/readline.h],, [
-            AC_MSG_ERROR([readline/readline.h header not found or not usable])
-        ])
-        # readline requires termcap (or ncurses)
-        SAVE_LIBS=$LIBS
-        LIBS="$TERMCAP_LIBS $LIBS"
-        AC_CHECK_LIB([readline], [rl_save_prompt], [RL_LIBS="-lreadline"], [
-            AC_MSG_ERROR([readline library is required for the sample client.])])
-        LIBS=$SAVE_LIBS
-      ]
-      )
-      AC_SUBST(RL_LDFLAGS)
-      AC_SUBST(RL_LIBS)
-      AC_SUBST(RL_CXXFLAGS)
-
-    # FUSE
-    AC_MSG_CHECKING(for FUSE)
-    AC_ARG_WITH(fuse,
-      AS_HELP_STRING(--with-fuse=PATH, base of FUSE installation),
-      [AC_MSG_RESULT($with_fuse)
-       case $with_fuse in
-       no)
-         ;;
-       yes)
-        CXXFLAGS="$CXXFLAGS -D_FILE_OFFSET_BITS=64"
-        CPPFLAGS="$CPPFLAGS -D_FILE_OFFSET_BITS=64"
-
-        AC_CHECK_HEADERS([fuse.h], [USE_FUSE=1], [
-            AC_MSG_ERROR([fuse.h header not found or not usable])])
-
-        AC_CHECK_LIB([fuse], [fuse_main], [FUSE_LIBS="-lfuse"], [
-            AC_MSG_ERROR([FUSE library is required for the sample client.])])
-
-        FUSE_CXXFLAGS="-D_FILE_OFFSET_BITS=64 -std=c++11"
-
-        CXXFLAGS=$SAVE_CXXFLAGS
-        CPPFLAGS=$SAVE_CPPFLAGS
-         ;;
-       *)
-
-        LDFLAGS="-L$with_fuse/lib $LDFLAGS"
-        CXXFLAGS="-I$with_fuse/include $CXXFLAGS -D_FILE_OFFSET_BITS=64"
-        CPPFLAGS="-I$with_fuse/include $CPPFLAGS -D_FILE_OFFSET_BITS=64"
-
-        AC_CHECK_HEADERS([fuse.h], [
-            USE_FUSE=1
-            FUSE_LDFLAGS="-L$with_fuse/lib "
-            FUSE_CXXFLAGS="-I$with_fuse/include -D_FILE_OFFSET_BITS=64 -std=c++11"],
-            [AC_MSG_ERROR([fuse.h header not found or not usable])]
-        )
-
-        AC_CHECK_LIB([fuse], [fuse_main], [FUSE_LIBS="-lfuse"], [
-            AC_MSG_ERROR([FUSE library is required for the sample client.])])
-
-        #restore
-        LDFLAGS=$SAVE_LDFLAGS
-        CXXFLAGS=$SAVE_CXXFLAGS
-        CPPFLAGS=$SAVE_CPPFLAGS
-        ;;
-       esac
-      ],
-      [AC_MSG_RESULT([--with-fuse not specified])
-        CXXFLAGS="$CXXFLAGS -D_FILE_OFFSET_BITS=64"
-        AC_CHECK_HEADERS([fuse.h], [
-            USE_FUSE=1
-            FUSE_CXXFLAGS="-D_FILE_OFFSET_BITS=64 -std=c++11"],
-            [USE_FUSE=0]
-        )
-        AC_CHECK_LIB([fuse], [fuse_main], [FUSE_LIBS="-lfuse"], [USE_FUSE=0])
-        CXXFLAGS=$SAVE_CXXFLAGS
-      ]
-      )
-
-      AC_SUBST(FUSE_LDFLAGS)
-      AC_SUBST(FUSE_LIBS)
-      AC_SUBST(FUSE_CXXFLAGS)
-fi
-
-AC_SUBST(USE_FUSE)
-AM_CONDITIONAL([BUILD_FUSE_EXAMPLE], [test "x$USE_FUSE" = "x1"])
 
 if test "x$WIN32" = "xyes" ; then
     AC_MSG_CHECKING(for WinHTTP)

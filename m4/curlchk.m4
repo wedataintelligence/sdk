@@ -1,5 +1,4 @@
-AC_DEFUN([CURL_CHK],
-[
+AC_DEFUN([CURL_CHK], [
 AC_MSG_CHECKING([whether cURL is built with OpenSSL support])
 AC_RUN_IFELSE([AC_LANG_PROGRAM([
     #include <curl/curl.h>
