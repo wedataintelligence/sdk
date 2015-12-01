@@ -11,7 +11,10 @@ mergeInto(LibraryManager.library, {
         return allocate(intArrayFromString(Module._useragent || ''), 'i8', ALLOC_STACK);
     },
     jsnet_cancel: function(ctx) {
-        Module._xhrStack[ctx].abort();
+        var xhr = Module._xhrStack[ctx];
+        if (xhr.readyState !== 4) {
+            xhr.abort();
+        }
     },
     jsnet_post: function(url, data) {
         url = Module.Pointer_stringify(url);
@@ -40,12 +43,12 @@ mergeInto(LibraryManager.library, {
                 var data = 0, len = 0;
                 if (this.status === 200) {
                     var u8 = new Uint8Array(this.response || []);
-                    len = u8.length;
-                    if ((data = Module._malloc(len))) {
+                    if ((data = Module._malloc(u8.length+1))) {
                         Module.HEAPU8.set(u8, data);
+                        len = u8.length;
                     }
                 }
-                Module.cxxnet_onloadend(ctx, this.status, data, len);
+                Module.cxxnet_onloadend(ctx, this.status, data | 0, len);
                 if (data) {
                     Module._free(data);
                 }
