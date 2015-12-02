@@ -67,7 +67,7 @@ function dumptree(api, term, n, recurse, depth)
 {
     depth = depth || 0;
 
-    console.debug('dumptree', n.getName(), recurse, depth);
+    // console.debug('dumptree', n.getName(), recurse, depth);
 
     if (depth)
     {
@@ -77,7 +77,7 @@ function dumptree(api, term, n, recurse, depth)
         switch (n.getType())
         {
             case MEGASDK.MegaNode.TYPE_FILE:
-                line += n.getSize();
+                line += MEGASDK.formatBytes(MEGASDK.getUint64(n.getSize()));
 
                 // const char* p;
                 // if ((p = strchr(n->fileattrstring.c_str(), ':')))
@@ -85,18 +85,17 @@ function dumptree(api, term, n, recurse, depth)
                     // line += ", has attributes " << p + 1;
                 // }
 
-                // if (n->plink)
                 if (n.isExported())
                 {
                     line += ", shared as exported";
-                    // if (n->plink->ets)
-                    // {
-                        // line += " temporal";
-                    // }
-                    // else
-                    // {
-                        // line += " permanent";
-                    // }
+                    if (n.getExpirationTime() > 0)
+                    {
+                        line += " temporal";
+                    }
+                    else
+                    {
+                        line += " permanent";
+                    }
                     line += " file link";
                 }
                 break;
@@ -104,32 +103,39 @@ function dumptree(api, term, n, recurse, depth)
             case MEGASDK.MegaNode.TYPE_FOLDER:
                 line += "folder";
 
-                // if(n->outshares)
                 if (n.isOutShare())
                 {
                     MEGASDK.getMegaList(api.getOutShares(n))
                         .forEach(function(share) {
-                            line += ", shared with " + share.getUser()
-                                + ", access " + accesslevels[share.getAccess()];
+                            if (share.getUser()) {
+                                line += ", shared with " + share.getUser()
+                                    + ", access " + accesslevels[share.getAccess()];
+                            }
                         });
 
                     if (n.isExported())
                     {
                         line += ", shared as exported";
-                        // if (n->plink->ets)
-                        // {
-                            // line += " temporal";
-                        // }
-                        // else
-                        // {
-                            // line += " permanent";
-                        // }
+                        if (n.getExpirationTime() > 0)
+                        {
+                            line += " temporal";
+                        }
+                        else
+                        {
+                            line += " permanent";
+                        }
                         line += " folder link";
                     }
                 }
 
-                // if (n->pendingshares)
-                // {
+                if (api.isPendingShare(n))
+                {
+                    MEGASDK.getMegaList(api.getPendingOutShares(n))
+                        .forEach(function(share) {
+                            // XXX: is this ok? Ie, pcr->targetemail
+                            line += ", shared (still pending) with " << share.getUser() + ", access "
+                                    + accesslevels[share.getAccess()];
+                        });
                     // for (share_map::iterator it = n->pendingshares->begin(); it != n->pendingshares->end(); it++)
                     // {
                         // if (it->first)
@@ -138,11 +144,11 @@ function dumptree(api, term, n, recurse, depth)
                                  // << accesslevels[it->second->access];
                         // }
                     // }
-                // }
+                }
 
                 if (n.isInShare())
                 {
-                    // line += ", inbound " << accesslevels[n->inshare->access] << " share";
+                    line += ", inbound " << accesslevels[api.getAccess(n)] + " share";
                 }
                 break;
 
@@ -161,7 +167,7 @@ function dumptree(api, term, n, recurse, depth)
 
     if (n.isFolder())
     {
-        var nodes = api.getChildren(n, MEGASDK.MegaApi.ORDER_ALPHABETICAL_DESC);
+        var nodes = api.getChildren(n, MEGASDK.MegaApi.ORDER_ALPHABETICAL_ASC);
 
         MEGASDK.getMegaList(nodes)
             .forEach(function(node) {
@@ -849,4 +855,4 @@ var BANNER =
 '  /\\__|    |/ __ \\\\   / / __ \\_/        \\  \\___|  | \\|  |  |_> |  |   /        \\|    `   |    |  \\  \n'+
 '  \\________(____  /\\_/ (____  /_______  /\\___  |__|  |__|   __/|__|  /_______  /_______  |____|__ \\ \n'+
 '                \\/          \\/        \\/     \\/         |__|                 \\/        \\/        \\/ \n'+
-'                                                               MEGA SDK version:  %% (273a9382)    \n';
+'                                                               MEGA SDK version:  %% (3c580ceb)    \n';
