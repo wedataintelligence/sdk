@@ -374,10 +374,12 @@ MEGASDK.Terminal = function (client) {
 
                                     ['Root', 'Inbox', 'Rubbish'].forEach(function(p) {
                                         var node = client['get' + p + 'Node']();
-                                        var handle = node.getBase64Handle();
+                                        // var handle = node.getBase64Handle();
                                         var info = MEGASDK.getTreeInfo(client, node);
                                         term.echo("    In " + p.toUpperCase()
-                                            + ": " + MEGASDK.formatBytes(data.getStorageUsed(handle))
+                                            // XXX: getStorageUsed does not seem to return a correct size..
+                                            // + ": " + MEGASDK.formatBytes(data.getStorageUsed(handle))
+                                            + ": " + MEGASDK.formatBytes(info.bytes)
                                             + " in " + info.files + " file(s)"
                                             + " and " + info.folders + " folder(s)");
                                     });
