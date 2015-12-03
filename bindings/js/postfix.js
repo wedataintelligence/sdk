@@ -37,10 +37,21 @@
         return !Module.isNULL(obj) && typeof obj.size === 'function' && typeof obj.get === 'function';
     };
     Module.getMegaList = function getMegaList(aMegaList) {
+        return Module.mapMegaList(aMegaList, false);
+    };
+    Module.mapMegaList = function mapMegaList(aMegaList, free, callback) {
         var list = [];
         if (Module.isMegaList(aMegaList)) {
+            if (typeof free === 'function') {
+                callback = free;
+                free = true;
+            }
             for (var len = aMegaList.size(), i = 0 ; i < len ; ++i ) {
-                list.push(aMegaList.get(i));
+                var n = aMegaList.get(i);
+                list.push(callback && callback(n) || n);
+            }
+            if (free) {
+                aMegaList.free();
             }
         }
         return list;
@@ -71,9 +82,10 @@
         };
         api.processMegaTree(node, proc, true);
         info.folders--;
+        proc.free();
         return info;
     };
-    Module.getMegaListener = function getMegaListener(obj) {
+    Module.getMegaListener = function getMegaListener(aListener) {
         var fn = [
             "onRequestStart", "onRequestFinish", "onRequestUpdate", "onRequestTemporaryError",
             "onTransferStart", "onTransferFinish", "onTransferUpdate", "onTransferTemporaryError",
@@ -85,10 +97,41 @@
         for (var m in fn) {
             if (fn.hasOwnProperty(m)) {
                 m = fn[m];
-                l[m] = obj[m] || (function(){});
+                l[m] = (function(m) {
+                    return function(a1, a2, a3) {
+                        var aa, nfo = [], r = false;
+                        aa = [].slice.call(arguments).map(String);
+                        if (a2 instanceof MegaRequest) {
+                            nfo.push(a2.getRequestString());
+                        }
+                        else if (Module.isMegaList(a2)) {
+                            nfo = Module.getMegaList(a2);
+                        }
+                        console.debug(m, aa, arguments, nfo);
+                        if (a3 instanceof MegaError) {
+                            var c = a3.getErrorCode();
+                            if (c !== MegaError.API_OK) {
+                                console.error(m, c, a3.getErrorString());
+                            }
+                        }
+                        if (aListener[m]) {
+                            try {
+                                r = aListener[m].apply(l, arguments);
+                            }
+                            catch (ex) {
+                                Module.printErr(ex);
+                            }
+                        }
+                        // [].slice.call(arguments, 2).map(destroy);
+                        if (r === true) {
+                            l.free();
+                            l = aListener = undefined;
+                        }
+                    };
+                })(m);
             }
         }
-        fn = obj = undefined;
+        fn = undefined;
 
         return l;
     };

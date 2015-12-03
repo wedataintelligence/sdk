@@ -1,46 +1,10 @@
 function MegaTerminalListener(aClient, aTerm, aCallback) {
     var self = this;
-    var listener = new MEGASDK.MegaListenerInterface();
-    listener.onRequestStart = function(api, request) {
-        console.debug('onRequestStart', arguments, request.getRequestString());
-    };
-    listener.onRequestFinish = function(api, request, error) {
-        console.debug('onRequestFinish', arguments, request.getRequestString(), error.getErrorCode(), error.getErrorString());
-        self.abort(request, error.getErrorCode());
-    };
-    listener.onRequestUpdate = function(api, request) {
-        console.debug('onRequestUpdate', arguments, request.getRequestString());
-    };
-    listener.onNodesUpdate = function(api, nodes) {
-        console.debug('onNodesUpdate', arguments, MEGASDK.getMegaList(nodes));
-    };
-    listener.onUsersUpdate = function(api, users) {
-        console.debug('onUsersUpdate', arguments, MEGASDK.getMegaList(users));
-    };
-    listener.onRequestTemporaryError = function(api, request, error) {
-        console.debug('onRequestTemporaryError', arguments);
-    };
-    listener.onTransferStart = function(api, transfer) {
-        console.debug('onTransferStart', arguments);
-    };
-    listener.onTransferUpdate = function(api, transfer) {
-        console.debug('onTransferUpdate', arguments);
-    };
-    listener.onTransferTemporaryError = function(api, transfer, error) {
-        console.debug('onTransferTemporaryError', arguments);
-    };
-    listener.onTransferFinish = function(api, transfer, error) {
-        console.debug('onTransferFinish', arguments);
-    };
-    listener.onAccountUpdate = function(api) {
-        console.debug('onAccountUpdate', arguments);
-    };
-    listener.onReloadNeeded = function(api) {
-        console.debug('onReloadNeeded', arguments);
-    };
-    listener.onContactRequestsUpdate = function(api, requests) {
-        console.debug('onContactRequestsUpdate', arguments, MEGASDK.getMegaList(requests));
-    };
+    var listener = MEGASDK.getMegaListener({
+        onRequestFinish: function(api, request, error) {
+            self.abort(request, error.getErrorCode());
+        }
+    });
     aClient.addListener(listener);
 
     this.abort = function() {
@@ -105,13 +69,12 @@ function dumptree(api, term, n, recurse, depth)
 
                 if (n.isOutShare())
                 {
-                    MEGASDK.getMegaList(api.getOutShares(n))
-                        .forEach(function(share) {
-                            if (share.getUser()) {
-                                line += ", shared with " + share.getUser()
-                                    + ", access " + accesslevels[share.getAccess()];
-                            }
-                        });
+                    MEGASDK.mapMegaList(api.getOutShares(n), function(share) {
+                        if (share.getUser()) {
+                            line += ", shared with " + share.getUser()
+                                + ", access " + accesslevels[share.getAccess()];
+                        }
+                    });
 
                     if (n.isExported())
                     {
@@ -130,12 +93,11 @@ function dumptree(api, term, n, recurse, depth)
 
                 if (api.isPendingShare(n))
                 {
-                    MEGASDK.getMegaList(api.getPendingOutShares(n))
-                        .forEach(function(share) {
-                            // XXX: is this ok? Ie, pcr->targetemail
-                            line += ", shared (still pending) with " << share.getUser() + ", access "
-                                    + accesslevels[share.getAccess()];
-                        });
+                    MEGASDK.mapMegaList(api.getPendingOutShares(n), function(share) {
+                        // XXX: is this ok? Ie, pcr->targetemail
+                        line += ", shared (still pending) with " << share.getUser() + ", access "
+                                + accesslevels[share.getAccess()];
+                    });
                     // for (share_map::iterator it = n->pendingshares->begin(); it != n->pendingshares->end(); it++)
                     // {
                         // if (it->first)
@@ -169,10 +131,9 @@ function dumptree(api, term, n, recurse, depth)
     {
         var nodes = api.getChildren(n, MEGASDK.MegaApi.ORDER_ALPHABETICAL_ASC);
 
-        MEGASDK.getMegaList(nodes)
-            .forEach(function(node) {
-                dumptree(api, term, node, recurse, depth + 1);
-            });
+        MEGASDK.mapMegaList(nodes, function(node) {
+            dumptree(api, term, node, recurse, depth + 1);
+        });
     }
 }
 
@@ -316,7 +277,7 @@ MEGASDK.Terminal = function (client) {
         if (cmd === 'test') {
             UNIT_TEST = 1;
             cmd = 'login';
-            argv = '.';
+            argv = localStorage.sid ? '':'.';
         }
         if (cmd === 'login' && String(argv) === '.') {
             argv = ['jssdk@yopmail.com', 'jssdktest'];
@@ -326,6 +287,23 @@ MEGASDK.Terminal = function (client) {
         }
         else if (cmd === 'debug') {
             debug = !debug;
+            listener.abort(null, MEGASDK.MegaError.API_OK);
+        }
+        else if (cmd === 'findleaks') {
+            Object.getOwnPropertyNames(MEGASDK)
+                .filter(function(n) {
+                    return n.substr(0,4) === 'Mega';
+                })
+                .forEach(function(o) {
+                    var cache = MEGASDK.getCache(MEGASDK[o]);
+                    var len = Object.keys(cache).length;
+                    if (len) {
+                        if ((o !== 'MegaApi' && o !== 'MegaListenerInterface') || len > 1) {
+                            assert(false, 'Found possible leak in interface ' + o);
+                            console.warn(o, cache);
+                        }
+                    }
+                });
             listener.abort(null, MEGASDK.MegaError.API_OK);
         }
         else if (cmd === 'version') {
@@ -463,6 +441,7 @@ MEGASDK.Terminal = function (client) {
                                 quiet = false;
                                 listener.resume();
                                 listener.abort(null, MEGASDK.MegaError.API_OK);
+                                return true;
                             }
                         }));
                     }
@@ -470,6 +449,7 @@ MEGASDK.Terminal = function (client) {
                         listener.resume();
                         listener.abort();
                     }
+                    return true;
                 }
             }));
         }
@@ -550,6 +530,7 @@ MEGASDK.Terminal = function (client) {
                         if (error.getErrorCode() === MEGASDK.MegaError.API_OK) {
                             term.echo("Exported link: " + request.getLink());
                         }
+                        return true;
                     }
                 }));
             }
@@ -560,24 +541,23 @@ MEGASDK.Terminal = function (client) {
 
                 term.echo("Shared folders:");
 
-                MEGASDK.getMegaList(client.getOutShares())
-                    .forEach(function(share) {
-                        var handle = share.getBase64Handle();
-                        var node = client.getNodeByBase64Handle(handle);
-                        var name = !MEGASDK.isNULL(node) && node.getName() || '???';
-                        var line = '    ' + name + ', shared ';
+                MEGASDK.mapMegaList(client.getOutShares(), function(share) {
+                    var handle = share.getBase64Handle();
+                    var node = client.getNodeByBase64Handle(handle);
+                    var name = !MEGASDK.isNULL(node) && node.getName() || '???';
+                    var line = '    ' + name + ', shared ';
 
-                        if (node.isExported()) {
-                            line += 'as exported link';
-                        }
-                        else {
-                            line += 'with ' + share.getUser() + ' (' + accesslevels[share.getAccess()] + ')';
-                        }
+                    if (node.isExported()) {
+                        line += 'as exported link';
+                    }
+                    else {
+                        line += 'with ' + share.getUser() + ' (' + accesslevels[share.getAccess()] + ')';
+                    }
 
-                        line += ', on ' + new Date(share.getTimestamp() * 1000).toISOString();
+                    line += ', on ' + new Date(share.getTimestamp() * 1000).toISOString();
 
-                        term.echo(line);
-                    });
+                    term.echo(line);
+                });
 
                 // XXX: getInSharesList returns nothing (!?)
                 // MEGASDK.getMegaList(client.getInSharesList())
@@ -587,19 +567,17 @@ MEGASDK.Terminal = function (client) {
                         // term.echo("From " + email + ":");
                     // });
 
-                MEGASDK.getMegaList(client.getContacts())
-                    .forEach(function(user) {
-                        var shares = client.getInShares(user);
+                MEGASDK.mapMegaList(client.getContacts(), function(user) {
+                    var shares = client.getInShares(user);
 
-                        if (MEGASDK.isMegaList(shares) && shares.size()) {
-                            term.echo("From " + user.getEmail() + ":");
+                    if (MEGASDK.isMegaList(shares) && shares.size()) {
+                        term.echo("From " + user.getEmail() + ":");
 
-                            MEGASDK.getMegaList(shares)
-                                .forEach(function(share) {
-                                    term.echo("    " + share.getName() + ' (' + accesslevels[client.getAccess(share)] + ')');
-                                });
-                        }
-                    });
+                        MEGASDK.mapMegaList(shares, function(share) {
+                            term.echo("    " + share.getName() + ' (' + accesslevels[client.getAccess(share)] + ')');
+                        });
+                    }
+                });
                 listener.abort(null, MEGASDK.MegaError.API_OK);
             }
             else {
@@ -613,28 +591,27 @@ MEGASDK.Terminal = function (client) {
                     // XXX: Sometimes node.isOutShare() retuns false for a node which is indeed an outshare :-/
                     if (node.isOutShare()) {
                         // var name = node.getName()
-                        MEGASDK.getMegaList(client.getOutShares(node))
-                            .forEach(function(share) {
-                                var handle = share.getBase64Handle();
-                                console.debug('handle', handle);
-                                node = client.getNodeByBase64Handle(handle);
-                                var name = !MEGASDK.isNULL(node) && node.getName() || '???';
-                                var line = '    ' + name;
+                        MEGASDK.mapMegaList(client.getOutShares(node), function(share) {
+                            var handle = share.getBase64Handle();
+                            console.debug('handle', handle);
+                            node = client.getNodeByBase64Handle(handle);
+                            var name = !MEGASDK.isNULL(node) && node.getName() || '???';
+                            var line = '    ' + name;
 
-                                // XXX: just using node.isExported() always detect the node
-                                // as exported, so additionaly checking for !share.getUser() :-/
+                            // XXX: just using node.isExported() always detect the node
+                            // as exported, so additionaly checking for !share.getUser() :-/
 
-                                if (!share.getUser() && node.isExported()) {
-                                    line += ', shared as exported link';
-                                }
-                                else {
-                                    line += ', shared with ' + share.getUser() + ' (' + accesslevels[share.getAccess()] + ')';
-                                }
+                            if (!share.getUser() && node.isExported()) {
+                                line += ', shared as exported link';
+                            }
+                            else {
+                                line += ', shared with ' + share.getUser() + ' (' + accesslevels[share.getAccess()] + ')';
+                            }
 
-                                line += ', on ' + new Date(share.getTimestamp() * 1000).toISOString();
+                            line += ', on ' + new Date(share.getTimestamp() * 1000).toISOString();
 
-                                term.echo(line);
-                            });
+                            term.echo(line);
+                        });
                     }
                     else {
                         assert(false, 'That is not being shared.');
@@ -665,6 +642,7 @@ MEGASDK.Terminal = function (client) {
                         onRequestFinish: function(api, request, error) {
                             assert(error.getErrorCode() === MEGASDK.MegaError.API_OK,
                                 'Error sharing folder: ' + argv[0]);
+                            return true;
                         }
                     }));
 
@@ -673,23 +651,23 @@ MEGASDK.Terminal = function (client) {
         }
         else if (cmd === 'users') {
             var visibility = ['hidden','visible','session user'];
-            MEGASDK.getMegaList(client.getContacts())
-                .forEach(function(user) {
-                    var shares = client.getInShares(user);
-                    var line = '    ' + (user.getEmail() || '???')
-                        + ', ' + (visibility[user.getVisibility()] || 'unknown visibility');
+            MEGASDK.mapMegaList(client.getContacts(), function(user) {
+                var shares = client.getInShares(user);
+                var line = '    ' + (user.getEmail() || '???')
+                    + ', ' + (visibility[user.getVisibility()] || 'unknown visibility');
 
-                    if (MEGASDK.isMegaList(shares)) {
-                        var size = shares.size();
-                        if (size) {
-                            line += ', sharing ' + size + ' folder(s)';
-                        }
+                if (MEGASDK.isMegaList(shares)) {
+                    var size = shares.size();
+                    if (size) {
+                        line += ', sharing ' + size + ' folder(s)';
                     }
+                    shares.free();
+                }
 
-                    // XXX: it->second.pubk.isvalid()
+                // XXX: it->second.pubk.isvalid()
 
-                    term.echo(line);
-                });
+                term.echo(line);
+            });
             listener.abort(null, MEGASDK.MegaError.API_OK);
         }
         else if (cmd === 'killsession') {
@@ -810,7 +788,8 @@ MEGASDK.Terminal = function (client) {
                         // "symlink",
                         "version",
                         "debug",
-                        "quit"
+                        "findleaks",
+                        "test"
                     ].map(function(ln) {
                         term.echo('[[;#D5F5B8;]' + Array(indent).join(" ") + termEscape(ln) + ']');
                     });
