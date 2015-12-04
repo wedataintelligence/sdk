@@ -1,5 +1,5 @@
 --- webidl_binder.py.orig	Sun Nov 15 20:06:49 2015
-+++ webidl_binder.py	Thu Dec  3 00:58:52 2015
++++ webidl_binder.py	Fri Dec  4 16:28:59 2015
 @@ -15,2 +15,4 @@
  import WebIDL
 +import tempfile
@@ -25,16 +25,16 @@
 -  mid_js += [r'''%s.prototype = %s;
 +  global consts
 +  consts += [name]
-+  mid_js += [r'''%s.prototype = Object.create(WrapperObject.prototype);
++  mid_js += [r'''%s.prototype = Object.create(%s.prototype);
  %s.prototype.constructor = %s;
 @@ -81,4 +95,4 @@
  %s.__cache__ = {};
 -Module['%s'] = %s;
 -''' % (name, 'Object.create(%s.prototype)' % (implements[name][0] if implements.get(name) else 'WrapperObject'), name, name, name, name, name, name, name)]
 +define('%s', %s);
-+''' % (name, name, name, name, name, name, name, name)]
++''' % (name, 'WrapperObjectList' if name[-4:] == 'List' else 'WrapperObject', name, name, name, name, name, name, name)]
  
-@@ -90,2 +104,10 @@
+@@ -90,2 +104,52 @@
  }
 +WrapperObject.prototype = {
 +    free: function() {
@@ -44,18 +44,64 @@
 +        return "[" + (this.constructor.name || "unknown") + "]";
 +    }
 +};
++function WrapperObjectList() {
++}
++WrapperObjectList.prototype = Object.create(WrapperObject.prototype);
++WrapperObjectList.prototype.toArray = function() {
++    var i = 0;
++    var len = this.size();
++    var list = Array(len);
++    while (i < len) {
++        list[i] = this.get(i);
++        i++;
++    }
++    return list;
++};
++WrapperObjectList.prototype.forEach = function(cb, t) {
++    var i = 0;
++    var len = this.size();
++    while (i < len && cb.call(t, this.get(i), i, this) !== true) { i++ }
++    return this;
++};
++WrapperObjectList.prototype.map = function(cb, t) {
++    var i = 0;
++    var len = this.size();
++    var list = Array(len);
++    while (i < len) {
++        list[i] = cb.call(t, this.get(i), i, this);
++        i++;
++    }
++    return list;
++};
++WrapperObjectList.prototype.filter = function(cb, t) {
++    var i = 0;
++    var list = [];
++    var len = this.size();
++    while (i < len) {
++        var v = this.get(i);
++        if (cb.call(t, v, i, this)) {
++            list.push(v);
++        }
++        i++;
++    }
++    return list;
++};
  ''']
-@@ -115,3 +137,3 @@
+@@ -93,2 +157,3 @@
+ emit_constructor('WrapperObject')
++emit_constructor('WrapperObjectList')
+ 
+@@ -115,3 +180,3 @@
  
 -Module['NULL'] = wrapPointer(0);
 +define('NULL', wrapPointer(0));
  
-@@ -254,3 +276,3 @@
+@@ -254,3 +319,3 @@
  def type_to_cdec(raw):
 -  name = ret = type_to_c(raw.type.name, non_pointing=True)
 +  name = ret = type_to_c(raw.type.name, non_pointing=False)
    if raw.getExtendedAttribute('Const'): ret = 'const ' + ret
-@@ -445,5 +467,5 @@
+@@ -445,5 +510,5 @@
      %sEM_ASM_%s({
 -      var self = Module['getCache'](Module['%s'])[$0];
 +      var self = getCache(%s)[$0];
@@ -63,12 +109,12 @@
 -      %sself['%s'](%s)%s;
 +      %sself.%s(%s)%s;
      }, (int)this%s);
-@@ -455,3 +477,3 @@
+@@ -455,3 +520,3 @@
            func_name,
 -          ','.join(['$%d' % i for i in range(1, max_args + 1)]),
 +          ','.join(['wrapPointer($%d, %s)' % (i, raw[i-1].type.name) for i in range(1, max_args + 1)]),
            return_postfix,
-@@ -623,16 +645,15 @@
+@@ -623,16 +688,15 @@
  deferred_js = []
 +tocompile_c = []
  
@@ -91,7 +137,7 @@
 -      deferred_js += ["Module['%s'] = _emscripten_enum_%s();\n" % (identifier, function_id)]
 +      tocompile_c += ["printf(\"Module.%s = %%d;\\n\", %s);\n" % (identifier, value)]
      elif len(symbols) == 2:
-@@ -641,7 +662,7 @@
+@@ -641,7 +705,7 @@
          # namespace is a class
 -        deferred_js += ["Module['%s']['%s'] = _emscripten_enum_%s();\n" % \
 -                  (namespace, identifier, function_id)]
@@ -102,7 +148,7 @@
 -        deferred_js += ["Module['%s'] = _emscripten_enum_%s();\n" % (identifier, function_id)]
 +        tocompile_c += ["printf(\"Module.%s = %%d;\\n\", %s);\n" % (identifier, value)]
      else:
-@@ -649,11 +670,42 @@
+@@ -649,11 +713,42 @@
  
 +tocompile_c = '''
 +#include <megaapi.h>

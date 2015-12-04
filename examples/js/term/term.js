@@ -27,7 +27,7 @@ function MegaTerminalListener(aClient, aTerm, aCallback) {
 }
 
 var accesslevels = [ "read-only", "read/write", "full access" ];
-function dumptree(api, term, n, recurse, depth)
+function dumptree(api, lines, n, recurse, depth)
 {
     depth = depth || 0;
 
@@ -36,7 +36,7 @@ function dumptree(api, term, n, recurse, depth)
     if (depth)
     {
         var title = n.getName() || "CRYPTO_ERROR";
-        var line = Array(depth).join("    ") + title + ' (';
+        var line = title + ' (';
 
         switch (n.getType())
         {
@@ -119,7 +119,12 @@ function dumptree(api, term, n, recurse, depth)
         }
 
         line += ")" + (n.hasChanged(MEGASDK.MegaNode.CHANGE_TYPE_REMOVED) ? " (DELETED)" : "");
-        term.echo(line);
+        if (4e3 === lines.push(Array(depth).join("    ") + termEscape(line))) {
+            // XXX: jquery.terminal.js seem to have troubles handling too many entries, and
+            //      using his flush capabilities does not help since their cache seem buggy...
+            lines.push('[[;#fe1112;] -- Too many entries, output truncated.]');
+            return -1;
+        }
 
         if (!recurse)
         {
@@ -127,14 +132,23 @@ function dumptree(api, term, n, recurse, depth)
         }
     }
 
+    var r;
     if (n.isFolder())
     {
-        var nodes = api.getChildren(n, MEGASDK.MegaApi.ORDER_ALPHABETICAL_ASC);
-
-        MEGASDK.mapMegaList(nodes, function(node) {
-            dumptree(api, term, node, recurse, depth + 1);
-        });
+        api.getChildren(n, MEGASDK.MegaApi.ORDER_ALPHABETICAL_ASC)
+            .forEach(function(node) {
+                r = dumptree(api, lines, node, recurse, depth + 1);
+                return r === -1;
+            })
+            .free();
     }
+    return r;
+}
+
+function termEscape(str) {
+    return String(str).replace(/\W/g, function(ch) {
+        return '&#' + ch.charCodeAt(0) + ';';
+    });
 }
 
 var cwd = false;
@@ -168,12 +182,6 @@ MEGASDK.Terminal = function (client) {
     }
     apiFuncs._l += 2;
     apiFuncs._.sort();
-
-    var termEscape = function(str) {
-        return String(str).replace(/\W/g, function(ch) {
-            return '&#' + ch.charCodeAt(0) + ';';
-        });
-    }
 
     var UNIT_TEST = false;
 
@@ -501,7 +509,13 @@ MEGASDK.Terminal = function (client) {
                 listener.abort();
             }
             else {
-                dumptree(client, term, node, recursive);
+                var lines = [];
+                console.time('dumptree');
+                dumptree(client, lines, node, recursive, 0);
+                console.timeEnd('dumptree');
+                for (var i in lines) {
+                    term.echo(lines[i]);
+                }
                 listener.abort(null, MEGASDK.MegaError.API_OK);
             }
         }
@@ -836,4 +850,4 @@ var BANNER =
 '  /\\__|    |/ __ \\\\   / / __ \\_/        \\  \\___|  | \\|  |  |_> |  |   /        \\|    `   |    |  \\  \n'+
 '  \\________(____  /\\_/ (____  /_______  /\\___  |__|  |__|   __/|__|  /_______  /_______  |____|__ \\ \n'+
 '                \\/          \\/        \\/     \\/         |__|                 \\/        \\/        \\/ \n'+
-'                                                               MEGA SDK version:  %% (3c580ceb)    \n';
+'                                                               MEGA SDK version:  %% (40fb99d1)    \n';

@@ -36,9 +36,6 @@
     Module.isMegaList = function isMegaList(obj) {
         return !Module.isNULL(obj) && typeof obj.size === 'function' && typeof obj.get === 'function';
     };
-    Module.getMegaList = function getMegaList(aMegaList) {
-        return Module.mapMegaList(aMegaList, false);
-    };
     Module.mapMegaList = function mapMegaList(aMegaList, free, callback) {
         var list = [];
         if (Module.isMegaList(aMegaList)) {
@@ -46,10 +43,7 @@
                 callback = free;
                 free = true;
             }
-            for (var len = aMegaList.size(), i = 0 ; i < len ; ++i ) {
-                var n = aMegaList.get(i);
-                list.push(callback && callback(n) || n);
-            }
+            list = aMegaList.map(callback)
             if (free) {
                 aMegaList.free();
             }
@@ -105,7 +99,7 @@
                             nfo.push(a2.getRequestString());
                         }
                         else if (Module.isMegaList(a2)) {
-                            nfo = Module.getMegaList(a2);
+                            nfo = a2.toArray();
                         }
                         console.debug(m, aa, arguments, nfo);
                         if (a3 instanceof MegaError) {
