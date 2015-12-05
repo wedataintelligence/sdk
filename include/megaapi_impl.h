@@ -1063,6 +1063,7 @@ class MegaApiImpl : public MegaApp
         int isLoggedIn();
         char* getMyEmail();
         char* getMyUserHandle();
+        char* getMyXMPPJid();
         static void setLogLevel(int logLevel);
         static void setLoggerClass(MegaLogger *megaLogger);
         static void log(int logLevel, const char* message, const char *filename = NULL, int line = -1);
@@ -1232,6 +1233,7 @@ class MegaApiImpl : public MegaApp
         MegaError checkAccess(MegaNode* node, int level);
         MegaError checkMove(MegaNode* node, MegaNode* target);
 
+        bool isFilesystemAvailable();
         MegaNode *getRootNode();
         MegaNode* getInboxNode();
         MegaNode *getRubbishNode();

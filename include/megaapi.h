@@ -1774,7 +1774,7 @@ class MegaRequest
          *
          * This value is valid for these request in onRequestFinish when the
          * error code is MegaError::API_OK:
-         * - MegaApi::getUserData - Returns the XMPP ID of the contact
+         * - MegaApi::getUserData - Returns the XMPP JID of the user
          * - MegaApi::loadBalancing . Returns the response of the server
          * - MegaApi::getUserAttribute - Returns the value of the attribute
          *
@@ -3366,7 +3366,9 @@ class MegaApi
         enum {
             TRANSFER_METHOD_NORMAL = 0,
             TRANSFER_METHOD_ALTERNATIVE_PORT = 1,
-            TRANSFER_METHOD_AUTO = 2
+            TRANSFER_METHOD_AUTO = 2,
+            TRANSFER_METHOD_AUTO_NORMAL = 3,
+            TRANSFER_METHOD_AUTO_ALTERNATIVE = 4
         };
 
         /**
@@ -3838,6 +3840,7 @@ class MegaApi
          * - MegaRequest::getName - Returns the name of the logged user
          * - MegaRequest::getPassword - Returns the the public RSA key of the account, Base64-encoded
          * - MegaRequest::getPrivateKey - Returns the private RSA key of the account, Base64-encoded
+         * - MegaRequest::getText - Returns the XMPP JID of the logged user
          *
          * @param listener MegaRequestListener to track this request
          */
@@ -4048,6 +4051,18 @@ class MegaApi
          * @return User handle of the account
          */
         char* getMyUserHandle();
+
+        /**
+         * @brief Returns the XMPP JID of the currently open account
+         *
+         * If the MegaApi object isn't logged in,
+         * this function returns NULL
+         *
+         * You take the ownership of the returned value
+         *
+         * @return XMPP JID of the current account
+         */
+        char* getMyXMPPJid();
 
         /**
          * @brief Set the active log level
@@ -4276,7 +4291,7 @@ class MegaApi
          * To share a folder with an user, set the desired access level in the level parameter. If you
          * want to stop sharing a folder use the access level MegaShare::ACCESS_UNKNOWN
          *
-         * The associated request type with this request is MegaRequest::TYPE_COPY
+         * The associated request type with this request is MegaRequest::TYPE_SHARE
          * Valid data in the MegaRequest object received on callbacks:
          * - MegaRequest::getNodeHandle - Returns the handle of the folder to share
          * - MegaRequest::getEmail - Returns the email of the user that receives the shared folder
@@ -5229,6 +5244,12 @@ class MegaApi
          * - TRANSFER_METHOD_AUTO = 2
          * The SDK selects the transfer method automatically
          *
+         * - TRANSFER_METHOD_AUTO_NORMAL = 3
+         * The SDK selects the transfer method automatically starting with port 80.
+         *
+         *  - TRANSFER_METHOD_AUTO_ALTERNATIVE = 4
+         * The SDK selects the transfer method automatically starting with alternative port 8080.
+         *
          * @param method Selected transfer method for downloads
          */
         void setDownloadMethod(int method);
@@ -5245,6 +5266,12 @@ class MegaApi
          *
          * - TRANSFER_METHOD_AUTO = 2
          * The SDK selects the transfer method automatically
+         *
+         * - TRANSFER_METHOD_AUTO_NORMAL = 3
+         * The SDK selects the transfer method automatically starting with port 80.
+         *
+         * - TRANSFER_METHOD_AUTO_ALTERNATIVE = 4
+         * The SDK selects the transfer method automatically starting with alternative port 8080.
          *
          * @param method Selected transfer method for uploads
          */
@@ -5263,6 +5290,12 @@ class MegaApi
          * - TRANSFER_METHOD_AUTO = 2
          * The SDK selects the transfer method automatically
          *
+         * - TRANSFER_METHOD_AUTO_NORMAL = 3
+         * The SDK selects the transfer method automatically starting with port 80.
+         *
+         * - TRANSFER_METHOD_AUTO_ALTERNATIVE = 4
+         * The SDK selects the transfer method automatically starting with alternative port 8080.
+         *
          * @return Active transfer method for downloads
          */
         int getDownloadMethod();
@@ -5279,6 +5312,12 @@ class MegaApi
          *
          * - TRANSFER_METHOD_AUTO = 2
          * The SDK selects the transfer method automatically
+         *
+         * - TRANSFER_METHOD_AUTO_NORMAL = 3
+         * The SDK selects the transfer method automatically starting with port 80.
+         *
+         * - TRANSFER_METHOD_AUTO_ALTERNATIVE = 4
+         * The SDK selects the transfer method automatically starting with alternative port 8080.
          *
          * @return Active transfer method for uploads
          */
@@ -6276,6 +6315,16 @@ class MegaApi
          * - MegaError::API_EARGS - Invalid parameters
          */
         MegaError checkMove(MegaNode* node, MegaNode* target);
+
+        /**
+         * @brief Check if the MEGA filesystem is available in the local computer
+         *
+         * This function returns true after a successful call to MegaApi::fetchNodes,
+         * otherwise it returns false
+         *
+         * @return True if the MEGA filesystem is available
+         */
+        bool isFilesystemAvailable();
 
         /**
          * @brief Returns the root node of the account

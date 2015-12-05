@@ -2577,6 +2577,23 @@ char *MegaApiImpl::getMyUserHandle()
     return result;
 }
 
+char *MegaApiImpl::getMyXMPPJid()
+{
+    sdkMutex.lock();
+    if (ISUNDEF(client->me))
+    {
+        sdkMutex.unlock();
+        return NULL;
+    }
+
+    char jid[16];
+    Base32::btoa((const byte *)&client->me, MegaClient::USERHANDLE, jid);
+    char *result = MegaApi::strdup(jid);
+
+    sdkMutex.unlock();
+    return result;
+}
+
 void MegaApiImpl::setLogLevel(int logLevel)
 {
     if(!externalLogger)
@@ -2881,7 +2898,12 @@ void MegaApiImpl::setProxySettings(MegaProxy *proxySettings)
         url = proxySettings->getProxyURL();
 
     string localurl;
+
+#if defined(WINDOWS_PHONE) || (defined(_WIN32) && defined(USE_CURL))
+    localurl = url;
+#else
     fsAccess->path2local(&url, &localurl);
+#endif
 
     localProxySettings.setProxyURL(&localurl);
 
@@ -2892,14 +2914,24 @@ void MegaApiImpl::setProxySettings(MegaProxy *proxySettings)
             username = proxySettings->getUsername();
 
         string localusername;
+
+#if defined(WINDOWS_PHONE) || (defined(_WIN32) && defined(USE_CURL))
+        localusername = username;
+#else
         fsAccess->path2local(&username, &localusername);
+#endif
 
         string password;
         if(proxySettings->getPassword())
             password = proxySettings->getPassword();
 
         string localpassword;
+
+#if defined(WINDOWS_PHONE) || (defined(_WIN32) && defined(USE_CURL))
+        localpassword = password;
+#else
         fsAccess->path2local(&password, &localpassword);
+#endif
 
         localProxySettings.setCredentials(&localusername, &localpassword);
     }
@@ -3688,6 +3720,15 @@ void MegaApiImpl::setDownloadMethod(int method)
             break;
         case MegaApi::TRANSFER_METHOD_AUTO:
             client->autodownport = true;
+            break;
+        case MegaApi::TRANSFER_METHOD_AUTO_NORMAL:
+            client->usealtdownport = false;
+            client->autodownport = true;
+            break;
+        case MegaApi::TRANSFER_METHOD_AUTO_ALTERNATIVE:
+            client->usealtdownport = true;
+            client->autodownport = true;
+            break;
         default:
             break;
     }
@@ -3707,6 +3748,15 @@ void MegaApiImpl::setUploadMethod(int method)
             break;
         case MegaApi::TRANSFER_METHOD_AUTO:
             client->autoupport = true;
+            break;
+        case MegaApi::TRANSFER_METHOD_AUTO_NORMAL:
+            client->usealtupport = false;
+            client->autoupport = true;
+            break;
+        case MegaApi::TRANSFER_METHOD_AUTO_ALTERNATIVE:
+            client->usealtupport = true;
+            client->autoupport = true;
+            break;
         default:
             break;
     }
@@ -3716,7 +3766,14 @@ int MegaApiImpl::getDownloadMethod()
 {
     if (client->autodownport)
     {
-        return MegaApi::TRANSFER_METHOD_AUTO;
+        if(client->usealtdownport)
+        {
+            return MegaApi::TRANSFER_METHOD_AUTO_ALTERNATIVE;
+        }
+        else
+        {
+            return MegaApi::TRANSFER_METHOD_AUTO_NORMAL;
+        }
     }
 
     if (client->usealtdownport)
@@ -3731,7 +3788,14 @@ int MegaApiImpl::getUploadMethod()
 {
     if (client->autoupport)
     {
-        return MegaApi::TRANSFER_METHOD_AUTO;
+        if(client->usealtupport)
+        {
+            return MegaApi::TRANSFER_METHOD_AUTO_ALTERNATIVE;
+        }
+        else
+        {
+            return MegaApi::TRANSFER_METHOD_AUTO_NORMAL;
+        }
     }
 
     if (client->usealtupport)
@@ -7429,7 +7493,15 @@ MegaError MegaApiImpl::checkMove(MegaNode* megaNode, MegaNode* targetNode)
 	MegaError e(client->checkmove(node,target));
     sdkMutex.unlock();
 
-	return e;
+    return e;
+}
+
+bool MegaApiImpl::isFilesystemAvailable()
+{
+    sdkMutex.lock();
+    bool result = client->nodebyhandle(client->rootnodes[0]) != NULL;
+    sdkMutex.unlock();
+    return result;
 }
 
 bool MegaApiImpl::nodeComparatorDefaultASC (Node *i, Node *j)

@@ -1756,6 +1756,12 @@ int MegaClient::wait()
         // next retry of a failed transfer
         nds = NEVER;
 
+        if (httpio->success && chunkfailed)
+        {
+            // there is a pending transfer retry, don't wait
+            nds = Waiter::ds;
+        }
+
         nexttransferretry(PUT, &nds);
         nexttransferretry(GET, &nds);
 
@@ -2350,6 +2356,11 @@ void MegaClient::locallogout()
 
     init();
 
+    if (dbaccess)
+    {
+        dbaccess->currentDbVersion = DbAccess::LEGACY_DB_VERSION;
+    }
+
 #ifdef ENABLE_SYNC
     syncadding = 0;
 #endif
@@ -2791,8 +2802,7 @@ void MegaClient::finalizesc(bool complete)
     }
     else
     {
-        sctable->abort();
-        sctable->truncate();
+        sctable->remove();
 
         LOG_err << "Cache update DB write error - disabling caching";
 
@@ -3678,8 +3688,11 @@ void MegaClient::sc_opc()
                 if (dts != 0)
                 {
                     // this is a delete, find the existing object in state
-                    pcr->uts = dts;
-                    pcr->changed.deleted = true;
+                    if (pcr)
+                    {
+                        pcr->uts = dts;
+                        pcr->changed.deleted = true;
+                    }
                 }
                 else if (pcr)
                 {
@@ -6480,17 +6493,26 @@ void MegaClient::cr_response(node_vector* shares, node_vector* nodes, JSON* sele
                 }
                 else
                 {
-                    unsigned nsi, nni;
+                    n->applykey();
+                    if (sn->sharekey && n->nodekey.size() ==
+                            ((n->type == FILENODE) ? FILENODEKEYLENGTH : FOLDERNODEKEYLENGTH))
+                    {
+                        unsigned nsi, nni;
 
-                    nsi = addnode(&rshares, sn);
-                    nni = addnode(&rnodes, n);
+                        nsi = addnode(&rshares, sn);
+                        nni = addnode(&rnodes, n);
 
-                    sprintf(buf, "\",%u,%u,\"", nsi, nni);
+                        sprintf(buf, "\",%u,%u,\"", nsi, nni);
 
-                    // generate & queue share nodekey
-                    sn->sharekey->ecb_encrypt((byte*)n->nodekey.data(), keybuf, n->nodekey.size());
-                    Base64::btoa(keybuf, n->nodekey.size(), strchr(buf + 7, 0));
-                    crkeys.append(buf);
+                        // generate & queue share nodekey
+                        sn->sharekey->ecb_encrypt((byte*)n->nodekey.data(), keybuf, n->nodekey.size());
+                        Base64::btoa(keybuf, n->nodekey.size(), strchr(buf + 7, 0));
+                        crkeys.append(buf);
+                    }
+                    else
+                    {
+                        LOG_warn << "Skipping node due to an unavailable key";
+                    }
                 }
             }
             else
@@ -7415,6 +7437,22 @@ bool MegaClient::syncdown(LocalNode* l, string* localpath, bool rubbish)
                     // local version is newer
                     nchildren.erase(rit);
                 }
+                else if (ll->mtime == rit->second->mtime
+                         && (ll->size > rit->second->size
+                             || (ll->size == rit->second->size && memcmp(ll->crc, rit->second->crc, sizeof ll->crc) > 0)))
+
+                {
+                    if (ll->size < rit->second->size)
+                    {
+                        LOG_warn << "Syncdown. Same mtime but lower size: " << ll->name;
+                    }
+                    else
+                    {
+                        LOG_warn << "Syncdown. Same mtime and size, but lower CRC: " << ll->name;
+                    }
+
+                    nchildren.erase(rit);
+                }
                 else if (*ll == *(FileFingerprint*)rit->second)
                 {
                     // both files are identical
@@ -7779,6 +7817,21 @@ bool MegaClient::syncup(LocalNode* l, dstime* nds)
                     {
                         LOG_debug << "LocalNode is older: " << ll->name;
                         continue;
+                    }                           
+
+                    if (ll->mtime == rit->second->mtime)
+                    {
+                        if (ll->size < rit->second->size)
+                        {
+                            LOG_warn << "Syncup. Same mtime but lower size: " << ll->name;
+                            continue;
+                        }
+
+                        if (ll->size == rit->second->size && memcmp(ll->crc, rit->second->crc, sizeof ll->crc) < 0)
+                        {
+                            LOG_warn << "Syncup. Same mtime and size, but lower CRC: " << ll->name;
+                            continue;
+                        }
                     }
 
                     if (ll->node != rit->second)
@@ -8574,6 +8627,14 @@ void MegaClient::stopxfer(File* f)
         {
             app->transfer_removed(transfer);
             delete transfer;
+        }
+        else
+        {
+            if (transfer->type == PUT && transfer->localfilename.size())
+            {
+                LOG_debug << "Updating transfer path";
+                transfer->files.front()->prepare();
+            }
         }
     }
 }
