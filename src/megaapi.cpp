@@ -2050,9 +2050,19 @@ MegaError MegaApi::checkAccess(MegaNode* megaNode, int level)
     return pImpl->checkAccess(megaNode, level);
 }
 
+int MegaApi::checkAccess(const char* handle, int level)
+{
+    return pImpl->checkAccess(handle, level);
+}
+
 MegaError MegaApi::checkMove(MegaNode* megaNode, MegaNode* targetNode)
 {
     return pImpl->checkMove(megaNode, targetNode);
+}
+
+int MegaApi::checkMove(const char* handle, const char* targetNode)
+{
+    return pImpl->checkMove(handle, targetNode);
 }
 
 bool MegaApi::isFilesystemAvailable()

@@ -1232,6 +1232,8 @@ class MegaApiImpl : public MegaApp
         //Permissions
         MegaError checkAccess(MegaNode* node, int level);
         MegaError checkMove(MegaNode* node, MegaNode* target);
+        int checkAccess(const char* handle, int level);
+        int checkMove(const char* handle, const char* target);
 
         bool isFilesystemAvailable();
         MegaNode *getRootNode();

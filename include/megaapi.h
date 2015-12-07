@@ -6301,6 +6301,7 @@ class MegaApi
          * - MegaError::API_EARGS - Invalid parameters
          */
         MegaError checkAccess(MegaNode* node, int level);
+        int checkAccess(const char* handle, int level);
 
         /**
          * @brief Check if a node can be moved to a target node
@@ -6315,6 +6316,7 @@ class MegaApi
          * - MegaError::API_EARGS - Invalid parameters
          */
         MegaError checkMove(MegaNode* node, MegaNode* target);
+        int checkMove(const char* handle, const char* target);
 
         /**
          * @brief Check if the MEGA filesystem is available in the local computer

@@ -726,6 +726,8 @@ interface MegaApi
     DOMString getCRCFromFingerprint(DOMString fingerprint);
     DOMString getCRC(MegaNode node);
     MegaNode getNodeByCRC(DOMString crc, MegaNode parent);
+    long checkAccess(DOMString handle, long level);
+    long checkMove(DOMString node, DOMString target);
     //MegaError checkAccess(MegaNode node, long level);
     //MegaError checkMove(MegaNode node, MegaNode target);
     MegaNode getRootNode();

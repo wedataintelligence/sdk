@@ -7477,6 +7477,11 @@ MegaError MegaApiImpl::checkAccess(MegaNode* megaNode, int level)
 	return e;
 }
 
+int MegaApiImpl::checkAccess(const char *handle, int level)
+{
+	return checkAccess(getNodeByBase64Handle(handle), level).getErrorCode();
+}
+
 MegaError MegaApiImpl::checkMove(MegaNode* megaNode, MegaNode* targetNode)
 {
 	if(!megaNode || !targetNode) return MegaError(API_EARGS);
@@ -7494,6 +7499,11 @@ MegaError MegaApiImpl::checkMove(MegaNode* megaNode, MegaNode* targetNode)
     sdkMutex.unlock();
 
     return e;
+}
+
+int MegaApiImpl::checkMove(const char *handle, const char *targetHandle)
+{
+	return checkMove(getNodeByBase64Handle(handle), getNodeByBase64Handle(targetHandle)).getErrorCode();
 }
 
 bool MegaApiImpl::isFilesystemAvailable()
