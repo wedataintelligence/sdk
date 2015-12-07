@@ -488,6 +488,114 @@ MEGASDK.Terminal = function (client) {
             }
             listener.abort(null, e);
         }
+        else if (cmd === 'mv') {
+            argv = argv.map(String);
+            var srcNode = client.getNodeByPath(argv[0], cwd);
+            if (!srcNode.isValid) {
+                assert(false, argv[0] + ': No such file or directory.');
+                listener.abort();
+            }
+            else if (argv.length !== 2) {
+                listener.abort();
+            }
+            else {
+                var dstNode = client.getNodeByPath(argv[1], cwd);
+
+                if (dstNode.isValid) {
+                    if (dstNode.isFile()) {
+                        assert(false, argv[1] + ': Not a directory.');
+                        listener.abort();
+                    }
+
+                    return client.moveNode(srcNode, dstNode);
+                }
+
+                var path = argv[1].split(/[\\\/]/);
+
+                if (path.length === 1) {
+                    return client.renameNode(srcNode, argv[1]);
+                }
+
+                var name = path.pop();
+                path = path.join("/");
+
+                dstNode = client.getNodeByPath(path, cwd);
+
+                if (!dstNode.isValid || dstNode.isFile()) {
+                    assert(false, path + ': Not a directory.');
+                    return listener.abort();
+                }
+
+                listener.pause();
+                client.moveNode(srcNode, dstNode, MEGASDK.getMegaListener({
+                    onRequestFinish: function(api, request, error) {
+                        listener.resume();
+                        if (error.getErrorCode() === MEGASDK.MegaError.API_OK) {
+                            client.renameNode(srcNode, name);
+                        }
+                        return true;
+                    }
+                }));
+
+
+
+                return;
+                if (!dstNode.isValid) {
+                    assert(false, argv[1] + ': No such directory.');
+                    listener.abort();
+                }
+                else {
+                    var error;
+                    var srcHandle = srcNode.getBase64Handle();
+                    var dstHandle = dstNode.getBase64Handle();
+                    var proceed = function() {
+                        var srcParentNode = client.getParentNode(srcNode);
+                        var srcParentHandle = srcParentNode.getBase64Handle();
+
+                        if (srcParentHandle !== dstHandle) {
+                            if (error === MEGASDK.MegaError.API_OK) {
+
+                            }
+                            else {
+                                assert(false, "Move not permitted - try copy");
+                            }
+                        }
+                        listener.resume();
+                        listener.abort(null, error);
+                        proceed = undefined;
+                    };
+
+                    listener.pause();
+
+                    if (srcNode.getType() === MEGASDK.MegaNode.TYPE_FILE) {
+                        var dstParentNode = client.getParentNode(dstNode);
+
+                        // (there should never be any orphaned filenodes)
+                        if (!dstParentNode.isValid) {
+                            listener.resume();
+                            listener.abort();
+                            return;
+                        }
+
+                        var dstParentHandle = dstParentNode.getBase64Handle();
+
+                        error = client.checkMove(srcHandle, dstParentHandle);
+
+                        if (error === MEGASDK.MegaError.API_OK) {
+
+                        }
+
+                        // ...and set target to original target's parent
+                        dstNode = dstParentNode;
+                        dstHandle = dstParentHandle;
+                    }
+                    else {
+                        error = client.checkMove(srcHandle, dstHandle);
+                        proceed();
+                    }
+                }
+            }
+        }
         else if (cmd === 'rm') {
             var node = client.getNodeByPath(argv[0], cwd);
             if (!node.isValid) {
@@ -820,8 +928,8 @@ MEGASDK.Terminal = function (client) {
                         // "getfa type [path] [cancel]",
                         "mkdir remotepath",
                         "rm remotepath",
-                        // "mv srcremotepath dstremotepath",
-                        // "cp srcremotepath dstremotepath|dstemail:",
+                        "mv srcremotepath dstremotepath",
+                        "cp srcremotepath dstremotepath|dstemail:",
                     /*  "sync [localpath dstremotepath|cancelslot]",*/
                         "export remotepath [expireTime|del]",
                         // "share [remotepath [dstemail [r|rw|full] [origemail]]]",
