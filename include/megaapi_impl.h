@@ -1121,6 +1121,7 @@ class MegaApiImpl : public MegaApp
         void respondContactRequest();
 
         void removeContact(MegaUser *user, MegaRequestListener* listener=NULL);
+        void removeContact(const char *email, MegaRequestListener* listener=NULL);
         void logout(MegaRequestListener *listener = NULL);
         void localLogout(MegaRequestListener *listener = NULL);
         void submitFeedback(int rating, const char *comment, MegaRequestListener *listener = NULL);

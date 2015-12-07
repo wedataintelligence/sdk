@@ -4984,6 +4984,7 @@ class MegaApi
          * @param listener MegaRequestListener to track this request
          */
         void removeContact(MegaUser *user, MegaRequestListener* listener = NULL);
+        void removeContact(const char *email, MegaRequestListener* listener = NULL);
 
         /**
          * @brief Logout of the MEGA account invalidating the session

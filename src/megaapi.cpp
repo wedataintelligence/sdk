@@ -1494,6 +1494,11 @@ void MegaApi::removeContact(MegaUser *user, MegaRequestListener* listener)
     pImpl->removeContact(user, listener);
 }
 
+void MegaApi::removeContact(const char *email, MegaRequestListener* listener)
+{
+    pImpl->removeContact(email, listener);
+}
+
 void MegaApi::pauseTransfers(bool pause, MegaRequestListener* listener)
 {
     pImpl->pauseTransfers(pause, -1, listener);

@@ -3658,16 +3658,21 @@ void MegaApiImpl::replyContactRequest(MegaContactRequest *r, int action, MegaReq
     waiter->notify();
 }
 
-void MegaApiImpl::removeContact(MegaUser *user, MegaRequestListener* listener)
+void MegaApiImpl::removeContact(const char *email, MegaRequestListener* listener)
 {
 	MegaRequestPrivate *request = new MegaRequestPrivate(MegaRequest::TYPE_REMOVE_CONTACT, listener);
-    if(user)
+    if(email)
     {
-        request->setEmail(user->getEmail());
+        request->setEmail(email);
     }
 
 	requestQueue.push(request);
     waiter->notify();
+}
+
+void MegaApiImpl::removeContact(MegaUser *user, MegaRequestListener* listener)
+{
+	removeContact(user ? user->getEmail() : NULL, listener);
 }
 
 void MegaApiImpl::pauseTransfers(bool pause, int direction, MegaRequestListener* listener)

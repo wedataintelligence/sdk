@@ -645,7 +645,8 @@ interface MegaApi
     void addContact(DOMString email, MegaRequestListenerInterface listener);
     void inviteContact(DOMString email, DOMString message, long action, MegaRequestListenerInterface listener);
     void replyContactRequest(MegaContactRequest request, long action, MegaRequestListenerInterface listener);
-    void removeContact(MegaUser user, MegaRequestListenerInterface listener);
+    //void removeContact(MegaUser user, MegaRequestListenerInterface listener);
+    void removeContact(DOMString email, MegaRequestListenerInterface listener);
     void logout(MegaRequestListenerInterface listener);
     void localLogout(MegaRequestListenerInterface listener);
     void submitFeedback(long rating, DOMString comment, MegaRequestListenerInterface listener);
