@@ -495,7 +495,16 @@ MEGASDK.Terminal = function (client) {
                 listener.abort();
             }
             else {
-                client.remove(node);
+                var handle = node.getBase64Handle();
+                var error = client.checkAccess(handle, MEGASDK.MegaShare.ACCESS_FULL);
+
+                if (error !== MEGASDK.MegaError.API_OK) {
+                    assert(false, argv[0] + ': Access denied.');
+                    listener.abort(null, error);
+                }
+                else {
+                    client.remove(node);
+                }
             }
         }
         else if (cmd === 'ls') {
