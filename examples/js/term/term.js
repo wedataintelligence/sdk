@@ -488,6 +488,42 @@ MEGASDK.Terminal = function (client) {
             }
             listener.abort(null, e);
         }
+        else if (cmd === 'cp') {
+            argv = argv.map(String);
+            if (argv.length === 2) {
+                var srcNode = client.getNodeByPath(argv[0], cwd);
+                if (!srcNode.isValid) {
+                    assert(false, argv[0] + ': No such file or directory.');
+                    listener.abort();
+                }
+                else {
+                    var target = argv[1];
+
+                    if (target[target.length - 1] === ':') {
+                        client.sendFileToUser(srcNode, target.substr(0,target.length-1));
+                    }
+                    else {
+                        var dstNode = client.getNodeByPath(target, cwd);
+
+                        if (!dstNode.isValid || dstNode.isFile()) {
+                            assert(false, target + ': Not a directory.');
+                            listener.abort();
+                        }
+                        else {
+                            var access = client.checkAccess(dstNode.getBase64Handle(), MEGASDK.MegaShare.ACCESS_READWRITE);
+
+                            if (access !== MEGASDK.MegaError.API_OK) {
+                                assert(false, "Write access denied.");
+                                listener.abort();
+                            }
+                            else {
+                                client.copyNode(srcNode, dstNode);
+                            }
+                        }
+                    }
+                }
+            }
+        }
         else if (cmd === 'mv') {
             argv = argv.map(String);
             var srcNode = client.getNodeByPath(argv[0], cwd);
