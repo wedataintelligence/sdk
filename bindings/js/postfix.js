@@ -27,18 +27,9 @@
         }
         return device;
     })();
-    Module.isMyObject = function isMyObject(obj) {
-        return (obj && typeof obj === 'object' && typeof obj.ptr === 'number');
-    };
-    Module.isNULL = function isNULL(obj) {
-        return !Module.isMyObject(obj) || obj.ptr === 0;
-    };
-    Module.isMegaList = function isMegaList(obj) {
-        return !Module.isNULL(obj) && typeof obj.size === 'function' && typeof obj.get === 'function';
-    };
     Module.mapMegaList = function mapMegaList(aMegaList, free, callback) {
         var list = [];
-        if (Module.isMegaList(aMegaList)) {
+        if (Object(aMegaList).isList) {
             if (typeof free === 'function') {
                 callback = free;
                 free = true;
@@ -98,7 +89,7 @@
                         if (a2 instanceof MegaRequest) {
                             nfo.push(a2.getRequestString());
                         }
-                        else if (Module.isMegaList(a2)) {
+                        else if (Object(a2).isList) {
                             nfo = a2.toArray();
                         }
                         console.debug(m, aa, arguments, nfo);

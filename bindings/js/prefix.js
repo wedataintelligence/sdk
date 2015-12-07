@@ -26,3 +26,12 @@
         root.MEGASDK = factory();
     }
 }(this, /** @lends MEGASDK */ function(Module) {
+
+var _emscripten_async_call = function(func, arg, ms) {
+    Module["noExitRuntime"] = true;
+    setTimeout(function() {
+        if (!ABORT) {
+            Runtime.getFuncWrapper(func, "vi")(arg);
+        }
+    }, ms | 0);
+}

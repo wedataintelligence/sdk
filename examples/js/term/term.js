@@ -403,6 +403,7 @@ MEGASDK.Terminal = function (client) {
                                         MEGASDK.getMegaAccountList('Balance', data)
                                             .forEach(function(a) {
                                                 term.echo("    Balance: " + a.getCurrency() + " " + a.getAmount());
+                                                a.free();
                                             });
                                     }
 
@@ -416,6 +417,7 @@ MEGASDK.Terminal = function (client) {
                                                 'Payment Method: ' + p.getMethod()
                                             ];
                                             term.echo("    " + data.join(", "));
+                                            p.free();
                                         });
 
                                     term.echo("Transaction history:");
@@ -427,23 +429,26 @@ MEGASDK.Terminal = function (client) {
                                                 'Delta: ' + p.getCurrency() + ' ' + p.getAmount() // XXX: no it->delta here ??
                                             ];
                                             term.echo("    " + data.join(", "));
+                                            p.free();
                                         });
 
                                     term.echo("Currently Active Sessions:");
                                     MEGASDK.getMegaAccountList('Session', data)
                                         .forEach(function(p) {
-                                            if (!p.isAlive()) return;
-                                            var data = [
-                                                'Session ID: ' + p.getBase64Handle() + (p.isCurrent() ? " **CURRENT**" : ''),
-                                                'Session Start: ' + MEGASDK.timeStampToDate(p.getCreationTimestamp(), true),
-                                                'Most recent activity: ' + MEGASDK.timeStampToDate(p.getMostRecentUsage(), true),
-                                                'IP: ' + p.getIP() + ' (' + p.getCountry() + ')',
-                                                'User-Agent: ' + p.getUserAgent()
-                                            ];
-                                            data.map(function(ln) {
-                                                term.echo("    " + ln);
-                                            });
-                                            term.echo("----");
+                                            if (p.isAlive()) {
+                                                var data = [
+                                                    'Session ID: ' + p.getBase64Handle() + (p.isCurrent() ? " **CURRENT**" : ''),
+                                                    'Session Start: ' + MEGASDK.timeStampToDate(p.getCreationTimestamp(), true),
+                                                    'Most recent activity: ' + MEGASDK.timeStampToDate(p.getMostRecentUsage(), true),
+                                                    'IP: ' + p.getIP() + ' (' + p.getCountry() + ')',
+                                                    'User-Agent: ' + p.getUserAgent()
+                                                ];
+                                                data.map(function(ln) {
+                                                    term.echo("    " + ln);
+                                                });
+                                                term.echo("----");
+                                            }
+                                            p.free();
                                         });
 
                                     window.data=data;
@@ -471,7 +476,7 @@ MEGASDK.Terminal = function (client) {
             else {
                 node = client.getNodeByPath(String(argv[0]), cwd);
             }
-            if (MEGASDK.isNULL(node)) {
+            if (!node.isValid) {
                 assert(false, argv[0] + ': No such file or directory.');
             }
             else if (!node.isFolder()) {
@@ -485,7 +490,7 @@ MEGASDK.Terminal = function (client) {
         }
         else if (cmd === 'rm') {
             var node = client.getNodeByPath(argv[0], cwd);
-            if (MEGASDK.isNULL(node)) {
+            if (!node.isValid) {
                 assert(false, argv[0] + ': No such file or directory.');
                 listener.abort();
             }
@@ -504,7 +509,7 @@ MEGASDK.Terminal = function (client) {
                 node = cwd;
             }
 
-            if (MEGASDK.isNULL(node)) {
+            if (!node.isValid) {
                 assert(false, argv[recursive] + ': No such file or directory.');
                 listener.abort();
             }
@@ -522,7 +527,7 @@ MEGASDK.Terminal = function (client) {
         else if (cmd === 'export') {
             var node = client.getNodeByPath(String(argv[0]), cwd);
 
-            if (MEGASDK.isNULL(node)) {
+            if (!node.isValid) {
                 assert(false, argv[0] + ': Not such file/directory.');
                 listener.abort();
             }
@@ -551,6 +556,31 @@ MEGASDK.Terminal = function (client) {
                 }));
             }
         }
+        else if (cmd === 'mount') {
+            var rootnodenames = [ "ROOT", "INBOX", "RUBBISH" ];
+            var rootnodepaths = [ "/", "//in", "//bin" ];
+
+            for (var i = 0 ; i < 3 ; ++i ) {
+                term.echo(rootnodenames[i] + " on " + rootnodepaths[i]);
+            }
+
+            MEGASDK.mapMegaList(client.getContacts(), function(user) {
+                var shares = client.getInShares(user);
+
+                if (shares.isList && shares.size()) {
+                    shares.forEach(function(share) {
+                        var handle = share.getBase64Handle();
+                        var node = client.getNodeByBase64Handle(handle);
+
+                        if (node.isValid && node.isInShare()) {
+                            term.echo("INSHARE on " + user.getEmail() + ":" + node.getName() + ' (' + accesslevels[client.getAccess(node)] + ')');
+                        }
+                    });
+                }
+                shares.free();
+            });
+            listener.abort(null, MEGASDK.MegaError.API_OK);
+        }
         else if (cmd === 'share') {
             if (!argv.length) {
                 // list all shares (incoming and outgoing)
@@ -560,7 +590,7 @@ MEGASDK.Terminal = function (client) {
                 MEGASDK.mapMegaList(client.getOutShares(), function(share) {
                     var handle = share.getBase64Handle();
                     var node = client.getNodeByBase64Handle(handle);
-                    var name = !MEGASDK.isNULL(node) && node.getName() || '???';
+                    var name = node.isValid && node.getName() || '???';
                     var line = '    ' + name + ', shared ';
 
                     if (node.isExported()) {
@@ -570,7 +600,7 @@ MEGASDK.Terminal = function (client) {
                         line += 'with ' + share.getUser() + ' (' + accesslevels[share.getAccess()] + ')';
                     }
 
-                    line += ', on ' + new Date(share.getTimestamp() * 1000).toISOString();
+                    line += ', on ' + MEGASDK.timeStampToDate(share.getTimestamp(), true);
 
                     term.echo(line);
                 });
@@ -586,20 +616,21 @@ MEGASDK.Terminal = function (client) {
                 MEGASDK.mapMegaList(client.getContacts(), function(user) {
                     var shares = client.getInShares(user);
 
-                    if (MEGASDK.isMegaList(shares) && shares.size()) {
+                    if (shares.isList && shares.size()) {
                         term.echo("From " + user.getEmail() + ":");
 
-                        MEGASDK.mapMegaList(shares, function(share) {
+                        shares.forEach(function(share) {
                             term.echo("    " + share.getName() + ' (' + accesslevels[client.getAccess(share)] + ')');
                         });
                     }
+                    shares.free();
                 });
                 listener.abort(null, MEGASDK.MegaError.API_OK);
             }
             else {
                 var node = client.getNodeByPath(String(argv[0]), cwd);
 
-                if (MEGASDK.isNULL(node) || !node.isFolder()) {
+                if (!node.isValid || !node.isFolder()) {
                     assert(false, argv[0] + ': Not such directory.');
                     listener.abort();
                 }
@@ -611,7 +642,7 @@ MEGASDK.Terminal = function (client) {
                             var handle = share.getBase64Handle();
                             console.debug('handle', handle);
                             node = client.getNodeByBase64Handle(handle);
-                            var name = !MEGASDK.isNULL(node) && node.getName() || '???';
+                            var name = node.isValid && node.getName() || '???';
                             var line = '    ' + name;
 
                             // XXX: just using node.isExported() always detect the node
@@ -624,7 +655,7 @@ MEGASDK.Terminal = function (client) {
                                 line += ', shared with ' + share.getUser() + ' (' + accesslevels[share.getAccess()] + ')';
                             }
 
-                            line += ', on ' + new Date(share.getTimestamp() * 1000).toISOString();
+                            line += ', on ' + MEGASDK.timeStampToDate(share.getTimestamp(), true);
 
                             term.echo(line);
                         });
@@ -672,7 +703,7 @@ MEGASDK.Terminal = function (client) {
                 var line = '    ' + (user.getEmail() || '???')
                     + ', ' + (visibility[user.getVisibility()] || 'unknown visibility');
 
-                if (MEGASDK.isMegaList(shares)) {
+                if (shares.isList) {
                     var size = shares.size();
                     if (size) {
                         line += ', sharing ' + size + ' folder(s)';
@@ -765,7 +796,7 @@ MEGASDK.Terminal = function (client) {
                         // "signup [email name|confirmationlink]",
                         // "confirm",
                         "session",
-                        // "mount",
+                        "mount",
                         "ls [-R] [remotepath]",
                         "cd [remotepath]",
                         "pwd",
@@ -850,4 +881,4 @@ var BANNER =
 '  /\\__|    |/ __ \\\\   / / __ \\_/        \\  \\___|  | \\|  |  |_> |  |   /        \\|    `   |    |  \\  \n'+
 '  \\________(____  /\\_/ (____  /_______  /\\___  |__|  |__|   __/|__|  /_______  /_______  |____|__ \\ \n'+
 '                \\/          \\/        \\/     \\/         |__|                 \\/        \\/        \\/ \n'+
-'                                                               MEGA SDK version:  %% (40fb99d1)    \n';
+'                                                               MEGA SDK version:  %% (6fb0f61f)    \n';
