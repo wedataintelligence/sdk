@@ -1,4 +1,5 @@
 # check for c-ares headers and libraries presence
+# set "check_cares" to "true" to perform the check
 # define HAVE_CARES
 
 AC_DEFUN([MEGASDK_CHECK_CARES],[

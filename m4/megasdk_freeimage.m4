@@ -1,4 +1,5 @@
 # check for freeimage headers and libraries presence
+# set "check_freeimage" to "true" to perform the check
 # define USE_FREEIMAGE
 
 AC_DEFUN([MEGASDK_CHECK_FREEIMAGE],[

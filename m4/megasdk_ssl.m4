@@ -1,4 +1,5 @@
 # check for OpenSSL headers and libraries presence
+# set "check_ssl" to "true" to perform the check
 # define HAVE_OPENSSL
 
 AC_DEFUN([MEGASDK_CHECK_SSL],[

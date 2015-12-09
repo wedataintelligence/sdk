@@ -19,21 +19,6 @@
 # program.
 ##
 
-#                                               -*- Autoconf -*-
-# Process this file with autoconf to produce a configure script.
-
-m4_include([m4/ax_prog_doxygen.m4])
-m4_include([m4/ax_check_compile_flag.m4])
-m4_include([m4/ax_check_link_flag.m4])
-m4_include([m4/megasdk_cryptopp.m4])
-m4_include([m4/megasdk_sodium.m4])
-m4_include([m4/megasdk_zlib.m4])
-m4_include([m4/megasdk_freeimage.m4])
-m4_include([m4/megasdk_db.m4])
-m4_include([m4/megasdk_ssl.m4])
-m4_include([m4/megasdk_cares.m4])
-m4_include([m4/megasdk_curl.m4])
-
 AC_PREREQ([2.61])
 
 # The Mega SDK version number is generated into config.h.
@@ -268,12 +253,13 @@ if test x$enable_megaapi = xyes; then
 fi
 AM_CONDITIONAL([BUILD_MEGAAPI], [test "$enable_megaapi" = "yes"])
 
-# Emscripten
-AC_MSG_CHECKING([if building javascript bindings])
-AC_ARG_ENABLE(javascript,
-    AS_HELP_STRING([--enable-javascript], [build javascript bindings]),
-    [], [enable_javascript=yes])
-AC_MSG_RESULT([$enable_javascript])
+# determine platform include path
+if test "x$WIN32" = "xyes" ; then
+    platform_include="mega/win32"
+else
+    platform_include="mega/posix"
+fi
+AC_SUBST(platform_include)
 
 # dependencies
 SDK_CXXFLAGS=""
@@ -283,7 +269,6 @@ SDK_LIBS=""
 
 # default values
 check_cryptopp=true
-check_sodium=false
 check_zlib=true
 check_freeimage=true
 check_db=true
@@ -291,6 +276,10 @@ check_ssl=true
 check_cares=true
 check_curl=true
 check_examples=true
+check_winhttp=false
+
+# libsodium is disabled
+check_sodium=false
 
 # disable cURL on Windows platform
 if test "x$WIN32" = "xyes" ; then
@@ -298,6 +287,14 @@ if test "x$WIN32" = "xyes" ; then
     check_cares=false
     check_curl=false
 fi
+
+# Windows specific checks
+if test "x$WIN32" = "xyes" ; then
+    check_winhttp=true
+fi
+
+# JavaScript bindings don't require the most of dependencies
+MEGASDK_CHECK_JS
 
 # disable for dependency checking when JS bindings is enabled
 if test "x$enable_javascript" = "xyes" ; then
@@ -319,41 +316,13 @@ MEGASDK_CHECK_DB
 MEGASDK_CHECK_SSL
 MEGASDK_CHECK_CARES
 MEGASDK_CHECK_CURL
+MEGASDK_CHECK_WINHTTP
 MEGASDK_CHECK_EXAMPLES
 
-
-# determine platform include path
-if test "x$WIN32" = "xyes" ; then
-    platform_include="mega/win32"
-else
-    platform_include="mega/posix"
-fi
-AC_SUBST(platform_include)
-
-
-if test "x$WIN32" = "xyes" ; then
-    AC_MSG_CHECKING(for WinHTTP)
-    AC_ARG_WITH(winhttp,
-      AS_HELP_STRING(--with-winhttp=PATH, base of WinHTTP installation),
-      [AC_MSG_RESULT($with_winhttp)
-       case $with_winhttp in
-       no)
-         ;;
-       *)
-        WINHTTP_LDFLAGS="-L$with_winhttp"
-        WINHTTP_LIBS="-lwinhttp"
-        WINHTTP_CXXFLAGS="-I$with_winhttp"
-        WINHTTP_CPPFLAGS="-I$with_winhttp"
-        ;;
-       esac
-      ],
-        AC_MSG_ERROR([WinHTTP.h header not found or not usable])
-      )
-      AC_SUBST(WINHTTP_LDFLAGS)
-      AC_SUBST(WINHTTP_LIBS)
-      AC_SUBST(WINHTTP_CXXFLAGS)
-      AC_SUBST(WINHTTP_CPPFLAGS)
-fi
+## Bindings
+MEGASDK_CHECK_PYTHON
+MEGASDK_CHECK_PHP
+MEGASDK_CHECK_JAVA
 
 # Tests
 AC_MSG_CHECKING([if building tests])
@@ -369,172 +338,6 @@ if test "x$enable_tests" = "xyes" ; then
 fi
 AM_CONDITIONAL([BUILD_TESTS], [test "$enable_tests" = "yes"])
 AC_MSG_RESULT([$enable_tests])
-
-
-## Bindings
-
-# Python
-AC_MSG_CHECKING([if building Python bindings])
-AC_ARG_ENABLE(python,
-    AS_HELP_STRING([--enable-python], [build Python language bindings]),
-    [AC_MSG_RESULT([$enableval])],
-    [
-     AC_MSG_RESULT([$enableval])
-     enable_python=no]
-)
-
-USE_PYTHON3=no
-if test "x$enable_python" = "xyes" ; then
-
-    AC_ARG_WITH(python3,
-      AS_HELP_STRING([--with-python3], [build Python 3 language bindings]),
-      [
-       case $with_python3 in
-       yes)
-        USE_PYTHON3=yes
-         ;;
-       *)
-        USE_PYTHON3=yes
-        ;;
-       esac
-      ],
-    )
-
-    if test "x$USE_PYTHON3" = "xyes" ; then
-        SWIG_FLAGS="-py3"
-	    AC_SUBST([SWIG_FLAGS])
-
-        AM_PATH_PYTHON(3)
-        AX_PYTHON_DEVEL(>= '3.0.0')
-    else
-        AM_PATH_PYTHON
-        AX_PYTHON_DEVEL
-    fi
-
-    AX_PKG_SWIG(2.0.0, [], [
-        AC_MSG_ERROR([SWIG executable not found!])
-    ])
-    AX_SWIG_ENABLE_CXX
-    AX_SWIG_MULTI_MODULE_SUPPORT
-    AX_SWIG_PYTHON
-
-    if test -z "$SWIG"; then
-        AC_MSG_ERROR([SWIG executable not found!])
-    fi
-
-    if test -z "$PYTHON_VERSION"; then
-        AC_MSG_ERROR([Python development files not found!])
-    fi
-
-fi
-AM_CONDITIONAL([BUILD_PYTHON], [test "$enable_python" = "yes"])
-
-# PHP
-AC_MSG_CHECKING([if building PHP bindings])
-AC_ARG_ENABLE(php,
-    AS_HELP_STRING([--enable-php], [build PHP language bindings]),
-    [AC_MSG_RESULT([yes])],
-    [AC_MSG_RESULT([no])
-     enable_php=no]
-)
-if test "x$enable_php" = "xyes" ; then
-    AC_CHECK_PROGS(PHPCONFIG, php-config php5-config php-config5 php4-config php-config4)
-    AC_MSG_CHECKING(for PHP header files)
-    PHPINC="`$PHPCONFIG --includes 2>/dev/null`"
-    if test "$PHPINC"; then
-        AC_MSG_RESULT($PHPINC)
-    else
-        dirs="/usr/include/php /usr/local/include/php /usr/include/php5 /usr/local/include/php5 /usr/include/php4 /usr/local/include/php4 /usr/local/apache/php"
-        for i in $dirs; do
-            if test -r $i/main/php_config.h -o -r $i/main/php_version.h; then
-                AC_MSG_RESULT($i is found)
-                PHPEXT="$i"
-                PHPINC="-I$PHPEXT -I$PHPEXT/main -I$PHPEXT/TSRM -I$PHPEXT/Zend"
-                break;
-            fi
-        done
-    fi
-    if test -z "$PHPINC"; then
-        AC_MSG_ERROR([PHP headers not found!])
-    fi
-
-    AC_MSG_CHECKING(for PHP extension-dir)
-    PHPLIBDIR="`$PHPCONFIG --extension-dir 2>/dev/null | sed "s#/lib/#/lib${LIBPOSTFIX}/#g"`"
-    if test ! -z "$PHPLIBDIR"; then
-        AC_MSG_RESULT($PHPLIBDIR)
-    else
-        AC_MSG_ERROR([PHP development files not found!])
-    fi
-
-    AC_SUBST(PHPINC)
-	AC_SUBST(PHPEXT)
-	AC_SUBST(PHPLIBDIR)
-
-    AX_PKG_SWIG(2.0.0, [], [
-        AC_MSG_ERROR([SWIG executable not found!])
-    ])
-    AX_SWIG_ENABLE_CXX
-    AX_SWIG_MULTI_MODULE_SUPPORT
-
-    if test -z "$SWIG"; then
-        AC_MSG_ERROR([SWIG executable not found!])
-    fi
-fi
-AM_CONDITIONAL([BUILD_PHP], [test "$enable_php" = "yes"])
-
-# Java
-AC_MSG_CHECKING([if building Java bindings])
-AC_ARG_ENABLE(java,
-    AS_HELP_STRING([--enable-java], [build Java language bindings]),
-    [AC_MSG_RESULT([yes])],
-    [
-     AC_MSG_RESULT([no])
-     enable_java=no]
-)
-AC_ARG_WITH(java-include-dir,
-    AS_HELP_STRING([--with-java-include-dir=DIR], [look in DIR for Java headers]),
-	[JAVA_INCLUDE_DIR=$withval],)
-AC_SUBST(JAVA_INCLUDE_DIR)
-
-if test "x$enable_java" = "xyes" ; then
-    AX_PKG_SWIG(2.0.0, [], [
-        AC_MSG_ERROR([SWIG executable not found!])
-    ])
-    AX_SWIG_ENABLE_CXX
-    AX_SWIG_MULTI_MODULE_SUPPORT
-
-    if test -z "$SWIG"; then
-        AC_MSG_ERROR([SWIG executable not found!])
-    fi
-
-    AC_CHECK_PROG(JAVA, java, yes, no)
-    if test "x$JAVA" = "xno"; then
-      AC_MSG_ERROR([no java binary in PATH])
-    fi
-    AC_CHECK_PROG(JAVAC, javac, yes, no)
-    if test "x$JAVAC" = "xno"; then
-      AC_MSG_ERROR([no javac binary in PATH])
-    fi
-    AC_CHECK_PROG(JAR, jar, yes, no)
-    if test "x$JAR" = "xno"; then
-      AC_MSG_ERROR([no jar binary in PATH])
-    fi
-
-    SAVE_CPPFLAGS=$CPPFLAGS
-    CPPFLAGS="$CPPFLAGS -I$JAVA_INCLUDE_DIR"
-
-    # on Fedora / CentOS jni_md.h header is not included
-    if test -d "$JAVA_INCLUDE_DIR/linux"; then
-        CPPFLAGS="$CPPFLAGS -I$JAVA_INCLUDE_DIR/linux"
-        JAVA_INCLUDE_DIR_LINUX="$JAVA_INCLUDE_DIR/linux"
-        AC_SUBST(JAVA_INCLUDE_DIR_LINUX)
-    fi
-
-    AC_CHECK_HEADER(jni.h,, [AC_MSG_ERROR([could not find jni.h, please specify JAVA include directory using --with-java-include-dir option.])])
-    CPPFLAGS=$SAVE_CPPFLAGS
-fi
-AM_CONDITIONAL([BUILD_JAVA], [test "$enable_java" = "yes"])
-
 
 dnl #########################################################################
 dnl Doxygen settings
@@ -582,15 +385,10 @@ AC_MSG_NOTICE([Configured to build Mega SDK:
   Python3 bindings: $USE_PYTHON3
   PHP bindings:     $enable_php
   Java bindings:    $enable_java
+  JS bindings:      $enable_javascript
 
-  OpenSSL:          $LIBSSL_FLAGS $LIBSSL_LDFLAGS $LIBSSL_LIBS
-  Crypto++:         $CRYPTO_CXXFLAGS $CRYPTO_LDFLAGS $CRYPTO_LIBS
-  Sodium:           $SODIUM_CXXFLAGS $SODIUM_LDFLAGS $SODIUM_LIBS
-  Zlib:             $ZLIB_CXXFLAGS $ZLIB_LDFLAGS $ZLIB_LIBS
-  SQLite3:          $DB_CXXFLAGS $DB_LDFLAGS $DB_LIBS
-  c-ares:           $CARES_FLAGS $CARES_LDFLAGS $CARES_LIBS
-  cURL:             $LIBCURL_FLAGS $LIBCURL_LIBS
-  FreeeImage:       $FI_CXXFLAGS $FI_LDFLAGS $FI_LIBS
-  Readline:         $RL_CXXFLAGS $RL_LDFLAGS $RL_LIBS
-  Termcap:          $TERMCAP_CXXFLAGS $TERMCAP_LDFLAGS $TERMCAP_LIBS
+  CPP_FLAGS:        $SDK_CPPFLAGS
+  CXX_FLAGS:        $SDK_CXXFLAGS
+  LDFLAGS:          $SDK_LDFLAGS
+  SDK_LIBS:         $SDK_LIBS
 ])

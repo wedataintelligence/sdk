@@ -1,4 +1,5 @@
 # check for CryptoPP headers and libraries presence
+# set "check_cryptopp" to "true" to perform the check
 # define USE_CRYPTOPP
 
 AC_DEFUN([MEGASDK_CHECK_CRYPTOPP],[

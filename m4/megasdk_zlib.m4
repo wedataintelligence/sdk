@@ -1,4 +1,5 @@
 # check for zlib headers and libraries presence
+# set "check_zlib" to "true" to perform the check
 # define USE_ZLIB
 
 AC_DEFUN([MEGASDK_CHECK_ZLIB],[

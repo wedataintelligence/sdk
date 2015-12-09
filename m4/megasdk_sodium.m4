@@ -1,4 +1,5 @@
 # check for libsodium headers and libraries presence
+# set "check_sodium" to "true" to perform the check
 # define USE_SODIUM
 
 AC_DEFUN([MEGASDK_CHECK_SODIUM],[

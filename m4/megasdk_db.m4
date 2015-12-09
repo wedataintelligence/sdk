@@ -1,4 +1,5 @@
 # check for sqlite headers and libraries presence
+# set "check_db" to "true" to perform the check
 # define USE_SQLITE
 
 AC_DEFUN([MEGASDK_CHECK_DB],[

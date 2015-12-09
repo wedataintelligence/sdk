@@ -1,3 +1,7 @@
+# build applications located in "examples" folder
+# check for additional dependencies
+# set "check_examples" to "true" to perform the check and build example applications
+# define BUILD_EXAMPLES and BUILD_FUSE_EXAMPLE
 
 AC_DEFUN([MEGASDK_CHECK_EXAMPLES],[
 

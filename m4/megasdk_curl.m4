@@ -1,7 +1,6 @@
 # check for c-ares headers and libraries presence
+# set "check_curl" to "true" to perform the check
 # define USE_CURL
-
-m4_include([m4/curlchk.m4])
 
 AC_DEFUN([MEGASDK_CHECK_CURL],[
 # save
