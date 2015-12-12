@@ -677,6 +677,145 @@ MEGASDK.Terminal = function (client) {
                 listener.abort(null, MEGASDK.MegaError.API_OK);
             }
         }
+        else if (cmd === 'getq') {
+            var cancel = argv.length ? +argv[0] : -1;
+            var tfs = client.getTransfers();
+            var stm = client.getStreamingTransfers();
+
+            [].concat(tfs.toArray(), stm.toArray())
+                .forEach(function(it) {
+                    var line = [];
+                    var tag = it.getTag();
+
+                    line.push(tag + ': ' + it.getFileName());
+                    line.push('['+it.getTransferString()+']');
+
+                    if (cancel === tag) {
+                        line.push('Canceling...');
+                        client.cancelTransferByTag(tag);
+                    }
+
+                    term.echo('[[;#11bc78;]' + termEscape(line.join(" ")) + ']');
+                });
+
+                stm.free();
+                tfs.free();
+                listener.abort(null, MEGASDK.MegaError.API_OK);
+        }
+        else if (cmd === 'get') {
+            argv = argv.map(String);
+            var a1 = String(argv[0]);
+            if (~a1.indexOf('#')) {
+                assert(false, 'TODO');
+                listener.abort();
+            }
+            else {
+                var node = client.getNodeByPath(a1, cwd);
+                if (!node.isValid || !node.isFile()) {
+                    assert(false, a1 + ': No such file.');
+                    listener.abort();
+                }
+                else {
+                    var name = node.getName();
+                    var size = MEGASDK.getUint64(node.getSize());
+                    var download = MEGASDK.Download();
+                    var startError = function(ex) {
+                        assert(false, 'Unable to start download: ' + ex);
+                        listener.abort();
+                    };
+
+                    download.then(function(meth) {
+                        download = meth;
+                        console.info('Using download method: ' + meth.name, meth);
+
+                        var pending = 0;
+                        var finish = function(name) {
+                            if (name) download.save(name);
+                            else download.close(true);
+                            transfersListener.free();
+                            $(window).trigger('resize');
+                        };
+                        var transfersListener = MEGASDK.getMegaListener('Transfer', {
+                            onTransferData: function(api, transfer, data, size) {
+                                console.error('** check this **', arguments);
+                            },
+                            onTransferUpdate: function(api, transfer, data, size) {
+                                console.debug('onTransferUpdate', arguments, data);
+
+                                pending++;
+                                download
+                                    .write(data)
+                                    .then(function() {
+                                        pending--;
+                                    }, function(ex) {
+                                        pending = -1;
+                                        assert(false, 'Write Error', ex);
+                                    });
+                            },
+                            onTransferFinish: function(api, transfer, error) {
+                                var ec = error.getErrorCode();
+                                var error = error.getErrorString();
+
+                                if (ec !== MEGASDK.MegaError.API_OK) {
+                                    term.echo('TRANSFER "'+name+'" FAILED: ' + error);
+                                    finish();
+                                }
+                                else {
+                                    var speed = MEGASDK.formatBytes(MEGASDK.getUint64(transfer.getSpeed()));
+
+                                    (function save() {
+                                        if (pending) {
+                                            if (pending < 0) {
+                                                term.echo('TRANSFER "'+name+'" FAILED: ' + error);
+                                                finish();
+                                            }
+                                            else {
+                                                console.warn('Pending writes, waiting...', pending);
+                                                setTimeout(save, 200);
+                                            }
+                                        }
+                                        else {
+                                            term.echo('[[;#11bc78;]' + termEscape(name
+                                                + ': transfered ' + offset + ' of ' + size
+                                                + ' bytes. ('+~~(offset*100/size)+'%, '+speed+'/s)') + ']');
+
+                                            if (offset !== size) {
+                                                nextChunk();
+                                            }
+                                            else {
+                                                console.info('Saving...', name);
+                                                finish(name);
+                                            }
+                                        }
+                                    })();
+                                }
+                            }
+                        });
+                        var offset = 0;
+                        var chunkSize = 8 * 1024 * 1024;
+                        // var chunkSize = 102400;
+                        var nextChunk = function() {
+                            var length = chunkSize;
+                            if (offset + chunkSize > size) {
+                                length = size - offset;
+                            }
+                            $(window).trigger('resize');
+                            client.startStreaming(node, offset, length, transfersListener);
+                            offset += length;
+                        };
+
+                        download
+                            .open(name, '', size)
+                            .then(function() {
+                                term.echo('[[;#11bc78;]' + termEscape(name + ': Incoming file transfer starting.') + ']');
+                                nextChunk();
+                                listener.abort(null, MEGASDK.MegaError.API_OK);
+                            }, startError);
+
+                    }, startError);
+                }
+            }
+        }
         else if (cmd === 'export') {
             var node = client.getNodeByPath(String(argv[0]), cwd);
 
@@ -959,7 +1098,9 @@ MEGASDK.Terminal = function (client) {
                         // "putq [cancelslot]",
                         // "get remotepath [offset [length]]",
                         // "get exportedfilelink#key [offset [length]]",
-                        // "getq [cancelslot]",
+                        "get exportedfilelink#key",
+                        "get remotepath",
+                        "getq [cancelslot]",
                         // "pause [get|put] [hard] [status]",
                         // "getfa type [path] [cancel]",
                         "mkdir remotepath",
@@ -1034,4 +1175,4 @@ var BANNER =
 '  /\\__|    |/ __ \\\\   / / __ \\_/        \\  \\___|  | \\|  |  |_> |  |   /        \\|    `   |    |  \\  \n'+
 '  \\________(____  /\\_/ (____  /_______  /\\___  |__|  |__|   __/|__|  /_______  /_______  |____|__ \\ \n'+
 '                \\/          \\/        \\/     \\/         |__|                 \\/        \\/        \\/ \n'+
-'                                                               MEGA SDK version:  %% (6fb0f61f)    \n';
+'                                                               MEGA SDK version:  %% (f1583284)    \n';

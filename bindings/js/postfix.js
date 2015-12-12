@@ -1,3 +1,4 @@
+    var DEBUG = true;
     Module.randomDevice = (function() {
         var device;
         if (typeof crypto !== "undefined") {
@@ -70,62 +71,116 @@
         proc.free();
         return info;
     };
-    Module.getMegaListener = function getMegaListener(aListener) {
-        var fn = [
-            "onRequestStart", "onRequestFinish", "onRequestUpdate", "onRequestTemporaryError",
-            "onTransferStart", "onTransferFinish", "onTransferUpdate", "onTransferTemporaryError",
-            "onUsersUpdate", "onNodesUpdate", "onAccountUpdate",
-            "onContactRequestsUpdate", "onReloadNeeded"
-        ];
-        var l = new MegaListenerInterface();
+    var ic = {
+        Global: ["onUsersUpdate", "onNodesUpdate", "onAccountUpdate", "onContactRequestsUpdate", "onReloadNeeded"],
+        Transfer: ["onTransferStart", "onTransferFinish", "onTransferUpdate", "onTransferData", "onTransferTemporaryError"],
+        Request: ["onRequestStart", "onRequestFinish", "onRequestUpdate", "onRequestTemporaryError"]
+    };
+    ic['*'] = Object.keys(ic).reduce(function(d,a) { return d.concat(ic[a]) }, []);
+    Module.getMegaListener = function getMegaListener(aType, aListener) {
+        if (typeof aType === 'object') {
+            aListener = aType;
+            aType = '';
+        }
+
+        var l = new Module['Mega' + aType + 'ListenerInterface']();
+        var fn = getMegaListener.ifaces[aType || '*'];
+        var a2c, a3c;
 
         for (var m in fn) {
             if (fn.hasOwnProperty(m)) {
+
                 m = fn[m];
-                l[m] = (function(m) {
+
+                if (m[2] === 'C') a2c = 'MegaContactRequestList';
+                else if (m[2] === 'U') a2c = 'MegaUserList';
+                else if (m[2] === 'R') a2c = 'MegaRequest';
+                else if (m[2] === 'A') a2c = 'MegaTransfer';
+                else if (m[2] === 'N') a2c = 'MegaNodeList';
+                else if (m[2] === 'T') a2c = 'MegaTransfer';
+                else a2c = null;
+
+                a3c = (m.substr(-6) === 'Finish' || m.substr(-5) === 'Error') ? 'MegaError' : null;
+
+                l[m] = (function(m, a2c, a3c) {
                     return function(a1, a2, a3) {
-                        var aa, nfo = [], r = false;
-                        aa = [].slice.call(arguments).map(String);
-                        if (a2 instanceof MegaRequest) {
-                            nfo.push(a2.getRequestString());
-                        }
-                        else if (Object(a2).isList) {
-                            nfo = a2.toArray();
-                        }
-                        console.debug(m, aa, arguments, nfo);
-                        if (a3 instanceof MegaError) {
-                            var c = a3.getErrorCode();
-                            if (c !== MegaError.API_OK) {
-                                console.error(m, c, a3.getErrorString());
-                            }
-                        }
+                        var r = false;
+
+                        if (DEBUG) console.debug(m, arguments);
+
                         if (aListener[m]) {
+                            var args = [].slice.call(arguments);
+
+                            a1 = wrapPointer(a1, MegaApi);
+                            if (a2c) a2 = wrapPointer(a2, Module[a2c]);
+                            if (a3c) a3 = wrapPointer(a3, Module[a3c]);
+
+                            // XXX: There is some problem with onTransferData, let's mimic it through onTransferUpdate
+                            //      except that we pass an ArrayBuffer rather than a string (byte *lastBytes)
+                            if (m === 'onTransferUpdate') {
+                                var size = a2.getDeltaSize();
+                                var voidPtr = a2.getLastBytes();
+                                a3 = Module.getArrayBuffer(voidPtr, size);
+                                unwrapPointer(voidPtr);
+                                args[3] = size;
+                            }
+
+                            if (DEBUG) {
+                                var nfo;
+                                if (a2 instanceof MegaRequest) {
+                                    nfo = a2.getRequestString();
+                                }
+                                else if (Object(a2).isList) {
+                                    nfo = a2.toArray();
+                                }
+                                if (a3 instanceof MegaError) {
+                                    var c = a3.getErrorCode();
+                                    if (c !== MegaError.API_OK) {
+                                        console.error(m, c, a3.getErrorString());
+                                    }
+                                }
+                                console.debug(m, [a1,a2,a3].map(String), nfo);
+                            }
+
                             try {
-                                r = aListener[m].apply(l, arguments);
+                                args[0] = a1;
+                                args[1] = a2;
+                                args[2] = a3;
+                                r = aListener[m].apply(l, args);
                             }
                             catch (ex) {
                                 Module.printErr(ex);
                             }
+
+                            if (a3c) {
+                                if (a2c) unwrapPointer(a2);
+                                unwrapPointer(a3);
+                            }
                         }
-                        // [].slice.call(arguments, 2).map(destroy);
                         if (r === true) {
                             l.free();
                             l = aListener = undefined;
                         }
                     };
-                })(m);
+                })(m, a2c, a3c);
             }
         }
         fn = undefined;
 
         return l;
     };
+    Module.getMegaListener.ifaces = ic;
+    ic = undefined;
     Module.getInt64 = function getInt64(value, unsigned) {
         var tempRet0 = Module.Runtime.getTempRet0();
         return Module.Runtime.makeBigInt(value, tempRet0, unsigned);
     };
     Module.getUint64 = function getUint64(value) {
         return Module.getInt64(value, true);
+    };
+    Module.getArrayBuffer = function(ptr, size) {
+        if (ptr && typeof ptr === 'object') ptr = ptr.ptr;
+        return new Uint8Array(Module.HEAPU8.buffer, ptr | 0, size | 0);
     };
     Module.formatBytes = function formatBytes(a) {
         var b = ["bytes", "KB", "MB", "GB", "TB", "PB", "EB"];

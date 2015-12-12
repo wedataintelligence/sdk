@@ -45,12 +45,13 @@
   <body>
     <div id="femsg"></div>
     <div id="terminal" class="terminal"><strong>Loading, please wait...</strong></div>
+    <a href="" download="filename" id="dllink" style="display:none;"></a>
 
     <script type='text/javascript'>
       var global = this;
 
       var MEGASDK = {
-        TOTAL_MEMORY: (0x1000000 * 8),
+        // TOTAL_MEMORY: (0x1000000 * 8),
         printErr: function() {
             console.error.apply(console, arguments);
         },

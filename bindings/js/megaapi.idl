@@ -313,7 +313,7 @@ interface MegaTransfer
     MegaNode getPublicMegaNode();
     boolean isSyncTransfer();
     boolean isStreamingTransfer();
-    DOMString getLastBytes();
+    VoidPtr getLastBytes();
     boolean isFolderTransfer();
     long getFolderTransferTag();
 };

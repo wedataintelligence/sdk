@@ -1,5 +1,5 @@
 --- webidl_binder.py.orig	Sun Nov 15 20:06:49 2015
-+++ webidl_binder.py	Mon Dec  7 02:08:10 2015
++++ webidl_binder.py	Fri Dec 11 20:45:37 2015
 @@ -15,2 +15,4 @@
  import WebIDL
 +import tempfile
@@ -97,17 +97,27 @@
  emit_constructor('WrapperObject')
 +emit_constructor('WrapperObjectList')
  
-@@ -115,3 +186,3 @@
+@@ -110,2 +181,9 @@
+ 
++function unwrapPointer(obj) {
++  delete getCache(obj.__class__)[obj.ptr];
++  delete obj.ptr;
++  freeze(obj);
++}
++Module['unwrapPointer'] = unwrapPointer;
++
+ function castObject(obj, __class__) {
+@@ -115,3 +193,3 @@
  
 -Module['NULL'] = wrapPointer(0);
 +define('NULL', wrapPointer(0));
  
-@@ -254,3 +325,3 @@
+@@ -254,3 +332,3 @@
  def type_to_cdec(raw):
 -  name = ret = type_to_c(raw.type.name, non_pointing=True)
 +  name = ret = type_to_c(raw.type.name, non_pointing=False)
    if raw.getExtendedAttribute('Const'): ret = 'const ' + ret
-@@ -445,5 +516,5 @@
+@@ -445,5 +523,5 @@
      %sEM_ASM_%s({
 -      var self = Module['getCache'](Module['%s'])[$0];
 +      var self = getCache(%s)[$0];
@@ -115,12 +125,11 @@
 -      %sself['%s'](%s)%s;
 +      %sself.%s(%s)%s;
      }, (int)this%s);
-@@ -455,3 +526,3 @@
+@@ -455,2 +533,3 @@
            func_name,
--          ','.join(['$%d' % i for i in range(1, max_args + 1)]),
-+          ','.join(['wrapPointer($%d, %s)' % (i, raw[i-1].type.name) for i in range(1, max_args + 1)]),
-           return_postfix,
-@@ -623,16 +694,15 @@
++          # ','.join([('wrapPointer($%d, %s)' % (i, raw[i-1].type.name)) if raw[i-1].type.name in interfaces else ('$%d' % i) for i in range(1, max_args + 1)]),
+           ','.join(['$%d' % i for i in range(1, max_args + 1)]),
+@@ -623,16 +702,15 @@
  deferred_js = []
 +tocompile_c = []
  
@@ -143,7 +152,7 @@
 -      deferred_js += ["Module['%s'] = _emscripten_enum_%s();\n" % (identifier, function_id)]
 +      tocompile_c += ["printf(\"Module.%s = %%d;\\n\", %s);\n" % (identifier, value)]
      elif len(symbols) == 2:
-@@ -641,7 +711,7 @@
+@@ -641,7 +719,7 @@
          # namespace is a class
 -        deferred_js += ["Module['%s']['%s'] = _emscripten_enum_%s();\n" % \
 -                  (namespace, identifier, function_id)]
@@ -154,7 +163,7 @@
 -        deferred_js += ["Module['%s'] = _emscripten_enum_%s();\n" % (identifier, function_id)]
 +        tocompile_c += ["printf(\"Module.%s = %%d;\\n\", %s);\n" % (identifier, value)]
      else:
-@@ -649,11 +719,42 @@
+@@ -649,11 +727,42 @@
  
 +tocompile_c = '''
 +#include <megaapi.h>

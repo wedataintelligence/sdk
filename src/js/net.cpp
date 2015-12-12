@@ -22,14 +22,14 @@
 #include "mega.h"
 
 extern "C" {
-	extern void jsnet_init();
+    extern void jsnet_init();
     extern void jsnet_setuseragent(const char*);
     extern int jsnet_post(const char*, const char*);
     extern void jsnet_cancel(int);
 
     mega::JSHttpContext __httpctx[9999]; // fixme
     extern void jsnet_onloadend(int ctx, int status, const char* data, int datalen)
-    {				
+    {
         mega::JSHttpContext* httpctx = (mega::JSHttpContext*) &__httpctx[ctx];
         mega::JSHttpIO* httpio = (mega::JSHttpIO*)httpctx->httpio;
 
@@ -39,9 +39,9 @@ extern "C" {
     {
         mega::JSHttpContext* httpctx = (mega::JSHttpContext*) &__httpctx[ctx];
         mega::JSHttpIO* httpio = (mega::JSHttpIO*)httpctx->httpio;
-        
+
         httpctx->postpos = loaded;
-        
+
         if (httpio->waiter)
         {
             httpio->waiter->notify();
@@ -69,12 +69,12 @@ void JSHttpIO::setuseragent(string* useragent)
 
 void JSHttpIO::disconnect()
 {
-    
+
 }
 
 void JSHttpIO::setdnsservers(const char*)
 {
-	LOG_info << "SETDNSSERVERS";
+    LOG_info << "SETDNSSERVERS";
 }
 
 void JSHttpIO::setproxy(Proxy* proxy)
@@ -118,7 +118,12 @@ void JSHttpIO::onloadend(void* handle, int status, const char *data, int datalen
         httpio->lastdata = Waiter::ds;
 
         if (datalen) {
-            req->in.assign(data, datalen);
+            if (req->buf) {
+                memcpy(req->buf, data, datalen);
+            }
+            else {
+                req->in.assign(data, datalen);
+            }
         }
     }
 
@@ -139,7 +144,7 @@ void JSHttpIO::onloadend(void* handle, int status, const char *data, int datalen
     }
 
     httpio->success = true;
-    
+
     if (waiter)
     {
         waiter->notify();
@@ -184,7 +189,7 @@ void JSHttpIO::post(HttpReq* req, const char* data, unsigned len)
         req->in.clear();
         req->status = REQ_INFLIGHT;
     }
-    
+
     if (waiter)
     {
         waiter->notify();
@@ -211,7 +216,7 @@ void JSHttpIO::cancel(HttpReq* req)
 
         jsnet_cancel(httpctx->ctxid);
         delete httpctx;
-        
+
         if (waiter)
         {
             waiter->notify();
