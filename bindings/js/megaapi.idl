@@ -672,6 +672,7 @@ interface MegaApi
     long getDownloadMethod();
     long getUploadMethod();
     MegaTransferList getTransfers();
+    MegaTransferList getStreamingTransfers();
     MegaTransfer getTransferByTag(long transferTag);
     MegaTransferList getTransfers(long type);
     MegaTransferList getChildTransfers(long transferTag);

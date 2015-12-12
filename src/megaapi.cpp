@@ -1545,6 +1545,11 @@ MegaTransferList *MegaApi::getTransfers()
     return pImpl->getTransfers();
 }
 
+MegaTransferList *MegaApi::getStreamingTransfers()
+{
+    return pImpl->getStreamingTransfers();
+}
+
 MegaTransfer *MegaApi::getTransferByTag(int transferTag)
 {
     return pImpl->getTransferByTag(transferTag);

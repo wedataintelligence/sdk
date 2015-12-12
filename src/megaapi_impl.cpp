@@ -3836,6 +3836,25 @@ MegaTransferList *MegaApiImpl::getTransfers()
     return result;
 }
 
+MegaTransferList *MegaApiImpl::getStreamingTransfers()
+{
+    sdkMutex.lock();
+
+    vector<MegaTransfer *> transfers;
+    for (std::map<int, MegaTransferPrivate *>::iterator it = transferMap.begin(); it != transferMap.end(); it++)
+    {
+        MegaTransferPrivate *transfer = it->second;
+        if (transfer->isStreamingTransfer())
+        {
+            transfers.push_back(transfer);
+        }
+    }
+    MegaTransferList *result = new MegaTransferListPrivate(transfers.data(), transfers.size());
+
+    sdkMutex.unlock();
+    return result;
+}
+
 MegaTransfer *MegaApiImpl::getTransferByTag(int transferTag)
 {
     MegaTransfer* value = NULL;

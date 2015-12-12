@@ -1147,6 +1147,7 @@ class MegaApiImpl : public MegaApp
         int getDownloadMethod();
         int getUploadMethod();
         MegaTransferList *getTransfers();
+        MegaTransferList *getStreamingTransfers();
         MegaTransfer* getTransferByTag(int transferTag);
         MegaTransferList *getTransfers(int type);
         MegaTransferList *getChildTransfers(int transferTag);
