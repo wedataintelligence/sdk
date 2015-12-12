@@ -9380,31 +9380,56 @@ void MegaApiImpl::sendPendingRequests()
             if(transferMap.find(transferTag) == transferMap.end()) { e = API_ENOENT; break; };
 
             MegaTransferPrivate* megaTransfer = transferMap.at(transferTag);
-            Transfer *transfer = megaTransfer->getTransfer();
 
-            #ifdef _WIN32
-                if(transfer->type==GET)
-                {
-                    transfer->localfilename.append("", 1);
-                    WIN32_FILE_ATTRIBUTE_DATA fad;
-                    if (GetFileAttributesExW((LPCWSTR)transfer->localfilename.data(), GetFileExInfoStandard, &fad))
-                        SetFileAttributesW((LPCWSTR)transfer->localfilename.data(), fad.dwFileAttributes & ~FILE_ATTRIBUTE_HIDDEN);
-                    transfer->localfilename.resize(transfer->localfilename.size()-1);
-                }
-            #endif
-
-            megaTransfer->setSyncTransfer(true);
-            megaTransfer->setLastErrorCode(API_EINCOMPLETE);
-
-            file_list files = transfer->files;
-            file_list::iterator iterator = files.begin();
-            while (iterator != files.end())
+            if (!megaTransfer->isStreamingTransfer())
             {
-                File *file = *iterator;
-                iterator++;
-                if(!file->syncxfer) client->stopxfer(file);
+                Transfer *transfer = megaTransfer->getTransfer();
+
+                #ifdef _WIN32
+                    if(transfer->type==GET)
+                    {
+                        transfer->localfilename.append("", 1);
+                        WIN32_FILE_ATTRIBUTE_DATA fad;
+                        if (GetFileAttributesExW((LPCWSTR)transfer->localfilename.data(), GetFileExInfoStandard, &fad))
+                            SetFileAttributesW((LPCWSTR)transfer->localfilename.data(), fad.dwFileAttributes & ~FILE_ATTRIBUTE_HIDDEN);
+                        transfer->localfilename.resize(transfer->localfilename.size()-1);
+                    }
+                #endif
+
+                megaTransfer->setSyncTransfer(true);
+                megaTransfer->setLastErrorCode(API_EINCOMPLETE);
+
+                file_list files = transfer->files;
+                file_list::iterator iterator = files.begin();
+                while (iterator != files.end())
+                {
+                    File *file = *iterator;
+                    iterator++;
+                    if(!file->syncxfer) client->stopxfer(file);
+                }
+                fireOnRequestFinish(request, MegaError(API_OK));
             }
-            fireOnRequestFinish(request, MegaError(API_OK));
+            else
+            {
+                m_off_t startPos = megaTransfer->getStartPos();
+                m_off_t endPos = megaTransfer->getEndPos();
+                m_off_t totalBytes = endPos - startPos + 1;
+
+                MegaNode *publicNode = megaTransfer->getPublicNode();
+                if (publicNode)
+                {
+                    client->preadabort(publicNode->getHandle(), startPos, totalBytes);
+                }
+                else
+                {
+                    Node *node = client->nodebyhandle(megaTransfer->getNodeHandle());
+                    if (node)
+                    {
+                        client->preadabort(node, startPos, totalBytes);
+                    }
+                }
+                fireOnRequestFinish(request, MegaError(API_OK));
+            }
             break;
         }
         case MegaRequest::TYPE_CANCEL_TRANSFERS:
