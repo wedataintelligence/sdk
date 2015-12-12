@@ -5463,7 +5463,7 @@ dstime MegaApiImpl::pread_failure(error e, int retry, void* param)
 	transfer->setDeltaSize(0);
 	transfer->setSpeed(0);
 	transfer->setLastBytes(NULL);
-	if (retry < transfer->getMaxRetries())
+	if (retry < transfer->getMaxRetries() && e != API_EINCOMPLETE)
 	{
         fireOnTransferTemporaryError(transfer, MegaError(e));
 		return (dstime)(retry*10);
