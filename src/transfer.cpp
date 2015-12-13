@@ -506,7 +506,7 @@ void DirectReadNode::dispatch()
             assert(!(*it)->drs);
         }
 
-        pendingcmd = new CommandDirectRead(this);
+        pendingcmd = new CommandDirectRead(client, this);
 
         client->reqs.add(pendingcmd);
     }
