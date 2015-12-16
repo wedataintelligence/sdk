@@ -57,6 +57,7 @@
         var info = { bytes: 0, files: 0, folders: 0 };
         var proc = new MegaTreeProcessorInterface();
         proc.processMegaNode = function(node) {
+            node = weakPointer(node, MegaNode);
             if (node.isFile()) {
                 info.files++;
                 info.bytes += Module.getUint64(node.getSize());

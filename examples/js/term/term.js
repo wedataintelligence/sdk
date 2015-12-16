@@ -265,6 +265,7 @@ MEGASDK.Terminal = function (client) {
                                 var ocwd = cwd;
                                 tty('cd ' + listener.newFolder, term);
                                 if (cwd !== ocwd) {
+                                    cwd.free();
                                     cwd = client.getRootNode();
                                     tty('rm ' + listener.newFolder, term);
                                 }
@@ -298,6 +299,7 @@ MEGASDK.Terminal = function (client) {
             listener.abort(null, MEGASDK.MegaError.API_OK);
         }
         else if (cmd === 'findleaks') {
+            var cl = argv[0], m = argv[1];
             Object.getOwnPropertyNames(MEGASDK)
                 .filter(function(n) {
                     return n.substr(0,4) === 'Mega';
@@ -306,9 +308,21 @@ MEGASDK.Terminal = function (client) {
                     var cache = MEGASDK.getCache(MEGASDK[o]);
                     var len = Object.keys(cache).length;
                     if (len) {
-                        if ((o !== 'MegaApi' && o !== 'MegaListenerInterface') || len > 1) {
+                        if ((o !== 'MegaApi' && o !== 'MegaListenerInterface' && o !== 'MegaNode') || len > 1) {
                             assert(false, 'Found possible leak in interface ' + o);
                             console.warn(o, cache);
+                            if (o === cl) {
+                                o = Object.keys(cache).map(function(c) {
+                                    try {
+                                        return cache[c][m]();
+                                    }
+                                    catch (ex) {
+                                        console.warn('Call failed', c, cache[c]);
+                                        return '$$'+c;
+                                    }
+                                });
+                                console.debug(o);
+                            }
                         }
                     }
                 });
@@ -390,6 +404,7 @@ MEGASDK.Terminal = function (client) {
                                             + ": " + MEGASDK.formatBytes(info.bytes)
                                             + " in " + info.files + " file(s)"
                                             + " and " + info.folders + " folder(s)");
+                                        node.free();
                                     });
 
                                     // TODO: transfers
@@ -451,7 +466,7 @@ MEGASDK.Terminal = function (client) {
                                             p.free();
                                         });
 
-                                    window.data=data;
+                                    data.free();
                                 }
                                 quiet = false;
                                 listener.resume();
@@ -483,6 +498,7 @@ MEGASDK.Terminal = function (client) {
                 assert(false, argv[0] + ': Not a directory.');
             }
             else {
+                cwd.free();
                 cwd = node;
                 e = MEGASDK.MegaError.API_OK;
             }
@@ -650,6 +666,7 @@ MEGASDK.Terminal = function (client) {
                     client.remove(node);
                 }
             }
+            node.free();
         }
         else if (cmd === 'ls') {
             var node;
@@ -1175,4 +1192,4 @@ var BANNER =
 '  /\\__|    |/ __ \\\\   / / __ \\_/        \\  \\___|  | \\|  |  |_> |  |   /        \\|    `   |    |  \\  \n'+
 '  \\________(____  /\\_/ (____  /_______  /\\___  |__|  |__|   __/|__|  /_______  /_______  |____|__ \\ \n'+
 '                \\/          \\/        \\/     \\/         |__|                 \\/        \\/        \\/ \n'+
-'                                                               MEGA SDK version:  %% (f1583284)    \n';
+'                                                               MEGA SDK version:  %% (89a08b10)    \n';
