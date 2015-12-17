@@ -649,6 +649,7 @@ MegaClient::MegaClient(MegaApp* a, Waiter* w, HttpIO* h, FileSystemAccess* f, Db
     init();
 
     f->client = this;
+    f->waiter = w;
 
     if ((app = a))
     {

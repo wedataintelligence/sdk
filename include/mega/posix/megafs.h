@@ -32,6 +32,7 @@
 #include <sys/vfs.h>
 #endif
 
+#include <aio.h>
 #include "mega.h"
 
 #define DEBRISFOLDER ".debris"
@@ -101,6 +102,21 @@ public:
     ~PosixFileSystemAccess();
 };
 
+struct MEGA_API PosixAsyncIOContext;
+struct MEGA_API PosixAsyncSynchronizer
+{
+    struct aiocb *aiocb;
+    PosixAsyncIOContext *context;
+};
+
+struct MEGA_API PosixAsyncIOContext : public AsyncIOContext
+{
+    PosixAsyncIOContext();
+    virtual ~PosixAsyncIOContext();
+
+    PosixAsyncSynchronizer *synchronizer;
+};
+
 class MEGA_API PosixFileAccess : public FileAccess
 {
 public:
@@ -121,8 +137,18 @@ public:
     bool sysopen();
     void sysclose();
 
-    PosixFileAccess();
+    // async interface
+    static pthread_mutex_t asyncmutex;
+    virtual bool asyncavailable();
+    virtual void asyncsysread(AsyncIOContext* context);
+    virtual void asyncsyswrite(AsyncIOContext* context);
+
+    PosixFileAccess(Waiter *w);
     ~PosixFileAccess();
+
+protected:
+    virtual AsyncIOContext* newasynccontext();
+    static void asyncopfinished(union sigval sigev_value);
 };
 
 class MEGA_API PosixDirNotify : public DirNotify
