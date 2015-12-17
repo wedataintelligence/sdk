@@ -287,24 +287,16 @@ void PosixFileAccess::updatelocalname(string* name)
     }
 }
 
-bool PosixFileAccess::sysread(byte* dst, unsigned len, m_off_t pos)
+bool PosixFileAccess::sysread(byte*, unsigned, m_off_t)
 {
-#ifndef __ANDROID__
-    return pread(fd, (char*)dst, len, pos) == len;
-#else
-    lseek(fd, pos, SEEK_SET);
-    return read(fd, (char*)dst, len) == len;
-#endif
+    // Not required for Javascript
+    return false;
 }
 
-bool PosixFileAccess::fwrite(const byte* data, unsigned len, m_off_t pos)
+bool PosixFileAccess::fwrite(const byte*, unsigned, m_off_t)
 {
-#ifndef __ANDROID__
-    return pwrite(fd, data, len, pos) == len;
-#else
-    lseek(fd, pos, SEEK_SET);
-    return write(fd, data, len) == len;
-#endif
+    // Not required for Javascript
+    return false;
 }
 
 bool PosixFileAccess::fopen(string* f, bool read, bool write)
