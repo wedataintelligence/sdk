@@ -8549,6 +8549,7 @@ bool MegaClient::startxfer(direction_t d, File* f, bool skipdupes)
 {
     if (!f->transfer)
     {
+#ifndef EMSCRIPTEN
         if (d == PUT)
         {
             if (!f->isvalid)    // (sync LocalNodes always have this set)
@@ -8571,13 +8572,12 @@ bool MegaClient::startxfer(direction_t d, File* f, bool skipdupes)
                 return false;
             }
         }
-        else
+#endif
+        
+        if (!f->isvalid)
         {
-            if (!f->isvalid)
-            {
-                // no valid fingerprint: use filekey as its replacement
-                memcpy(f->crc, f->filekey, sizeof f->crc);
-            }
+            // no valid fingerprint: use filekey as its replacement
+            memcpy(f->crc, f->filekey, sizeof f->crc);
         }
 
         Transfer* t;

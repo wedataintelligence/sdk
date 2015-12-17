@@ -89,8 +89,11 @@ void File::completed(Transfer* t, LocalNode* l)
         // store filename
         attrs.map['n'] = name;
 
-        // store fingerprint
-        t->serializefingerprint(&attrs.map['c']);
+        if (t->isvalid)
+        {
+            // store fingerprint
+            t->serializefingerprint(&attrs.map['c']);
+        }
 
         string tattrstring;
 

@@ -427,11 +427,13 @@ void Transfer::complete()
     {
         LOG_debug << "Upload complete: " << (files.size() ? files.front()->name : "NO_FILES") << " " << files.size();
 
+#ifndef EMSCRIPTEN
         // files must not change during a PUT transfer
         if (genfingerprint(slot->fa, true))
         {
             return failed(API_EREAD);
         }
+#endif
 
         // if this transfer is put on hold, do not complete
         client->checkfacompletion(uploadhandle, this);
