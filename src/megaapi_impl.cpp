@@ -5396,6 +5396,7 @@ void MegaApiImpl::transfer_failed(Transfer* tr, error e)
 
 void MegaApiImpl::transfer_limit(Transfer* t)
 {
+    LOG_warn << "Transfer limit";
     if(transferMap.find(t->tag) == transferMap.end()) return;
     MegaTransferPrivate* transfer = transferMap.at(t->tag);
     transfer->setUpdateTime(Waiter::ds);
@@ -5736,7 +5737,7 @@ void MegaApiImpl::syncupdate_put(Sync *sync, LocalNode *localNode, const char *p
 
 void MegaApiImpl::syncupdate_remote_file_addition(Sync *sync, Node *n)
 {
-    LOG_debug << "Sync - remote file addition detected " << n->displayname();
+    LOG_debug << "Sync - remote file addition detected " << n->displayname() << " Nhandle: " << LOG_NODEHANDLE(n->nodehandle);
     client->abortbackoff(false);
 
     if(syncMap.find(sync->tag) == syncMap.end()) return;
@@ -6418,6 +6419,12 @@ void MegaApiImpl::notify_retry(dstime dsdelta)
     if(previousFlag != waitingRequest)
         fireOnGlobalSyncStateChanged();
 #endif
+
+    if (dsdelta && requestMap.size() == 1)
+    {
+        MegaRequestPrivate *request = requestMap.begin()->second;
+        fireOnRequestTemporaryError(request, MegaError(API_EAGAIN));
+    }
 }
 
 // callback for non-EAGAIN request-level errors
