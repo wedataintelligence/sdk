@@ -1,14 +1,9 @@
 --- osrng.cpp.orig	Wed Feb 20 14:30:52 2013
-+++ osrng.cpp	Tue Dec  1 17:15:05 2015
-@@ -187,6 +187,27 @@ void AutoSeededRandomPool::Reseed(bool b
- 
- NAMESPACE_END
++++ osrng.cpp	Fri Dec 18 19:20:32 2015
+@@ -189,2 +189,22 @@
  
 +#elif defined(EMSCRIPTEN)
-+
-+extern "C" {
-+	extern int cryptopp_rngseed(unsigned int seedSize);
-+}
++#include <emscripten.h>
 +
 +NAMESPACE_BEGIN(CryptoPP)
 +
@@ -18,13 +13,13 @@
 +	byte *tmp = (byte *)seed;
 +	unsigned int len = seedSize;
 +	while (len) {
-+		*tmp++ = cryptopp_rngseed(len--);
++		*tmp++ = EM_ASM_INT({
++			return Module.randomDevice($0);
++		}, len--);
 +	}
 +	IncorporateEntropy(seed, seedSize);
 +}
 +
 +NAMESPACE_END
 +
- #endif
- 
  #endif

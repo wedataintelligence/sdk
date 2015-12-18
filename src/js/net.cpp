@@ -20,24 +20,21 @@
  */
 
 #include "mega.h"
+#include <emscripten.h>
 
 extern "C" {
-    extern void jsnet_init();
-    extern void jsnet_setuseragent(const char*);
     extern int jsnet_post(const char*, const char*);
-    extern void jsnet_cancel(int);
 
-    mega::JSHttpContext __httpctx[9999]; // fixme
-    extern void jsnet_onloadend(int ctx, int status, const char* data, int datalen)
+    extern void EMSCRIPTEN_KEEPALIVE jsnet_onloadend(void* ctx, int status, const char* data, int datalen)
     {
-        mega::JSHttpContext* httpctx = (mega::JSHttpContext*) &__httpctx[ctx];
+        mega::JSHttpContext* httpctx = (mega::JSHttpContext*) ctx;
         mega::JSHttpIO* httpio = (mega::JSHttpIO*)httpctx->httpio;
 
         httpio->onloadend(httpctx, status, data, datalen);
     }
-    extern void jsnet_progress(int ctx, int loaded)
+    extern void EMSCRIPTEN_KEEPALIVE jsnet_progress(void* ctx, int loaded)
     {
-        mega::JSHttpContext* httpctx = (mega::JSHttpContext*) &__httpctx[ctx];
+        mega::JSHttpContext* httpctx = (mega::JSHttpContext*) ctx;
         mega::JSHttpIO* httpio = (mega::JSHttpIO*)httpctx->httpio;
 
         httpctx->postpos = loaded;
@@ -55,7 +52,10 @@ JSHttpIO::JSHttpIO()
 {
     waiter = NULL;
     chunkedok = false;
-    jsnet_init();
+    EM_ASM({
+        Module._xhrStack = Module._xhrStack || [];
+        Module._ctxStack = Module._ctxStack || {};
+    });
 }
 
 JSHttpIO::~JSHttpIO()
@@ -64,7 +64,9 @@ JSHttpIO::~JSHttpIO()
 
 void JSHttpIO::setuseragent(string* useragent)
 {
-    jsnet_setuseragent(useragent->c_str());
+    EM_ASM_INT({
+        Module._useragent = Pointer_stringify($0);
+    }, useragent->c_str());
 }
 
 void JSHttpIO::disconnect()
@@ -182,12 +184,15 @@ void JSHttpIO::post(HttpReq* req, const char* data, unsigned len)
         httpctx->httpio = this;
         httpctx->req = req;
         httpctx->ctxid = ctx;
-        __httpctx[ctx] = *httpctx;
 
         req->httpiohandle = (void*)httpctx;
 
         req->in.clear();
         req->status = REQ_INFLIGHT;
+
+        EM_ASM_({
+            Module._ctxStack[$0] = $1;
+        }, ctx, httpctx);
     }
 
     if (waiter)
@@ -214,7 +219,14 @@ void JSHttpIO::cancel(HttpReq* req)
         req->status = REQ_FAILURE;
         req->httpiohandle = NULL;
 
-        jsnet_cancel(httpctx->ctxid);
+        EM_ASM_({
+            var xhr = Module._xhrStack[$0];
+            if (xhr.readyState !== 4) {
+                xhr.abort();
+            }
+            delete Module._ctxStack[$0];
+        }, httpctx->ctxid);
+
         delete httpctx;
 
         if (waiter)

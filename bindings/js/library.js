@@ -1,28 +1,13 @@
 
 mergeInto(LibraryManager.library, {
-    jsnet_init : function() {
-        Module._xhrStack =  [];
-        Module._useragent = null;
-    },
-    jsnet_setuseragent: function(ua) {
-        Module._useragent = Module.Pointer_stringify(ua);
-    },
-    jsnet_getuseragent: function() {
-        return allocate(intArrayFromString(Module._useragent || ''), 'i8', ALLOC_STACK);
-    },
-    jsnet_cancel: function(ctx) {
-        var xhr = Module._xhrStack[ctx];
-        if (xhr.readyState !== 4) {
-            xhr.abort();
-        }
-    },
     jsnet_post: function(url, data) {
         url = Module.Pointer_stringify(url);
         data = Module.Pointer_stringify(data);
 
         var ctx = Module._xhrStack.length;
         while (ctx--) {
-            if (Module._xhrStack[ctx].readyState === 4) {
+            var rs = Module._xhrStack[ctx].readyState;
+            if (rs === 4 || rs === 0) {
                 break;
             }
         }
@@ -48,15 +33,18 @@ mergeInto(LibraryManager.library, {
                         len = u8.length;
                     }
                 }
-                Module.cxxnet_onloadend(ctx, this.status, data | 0, len);
+                Module.cxxnet_onloadend(Module._ctxStack[ctx], this.status, data | 0, len);
                 if (data) {
                     Module._free(data);
+                }
+                if (this.response) {
+                    Module.neuterArrayBuffer(this.response);
                 }
             };
 
             xhr.upload.onprogress =
             xhr.onprogress = function(ev) {
-                Module.cxxnet_progress(ctx, ev.loaded);
+                Module.cxxnet_progress(Module._ctxStack[ctx], ev.loaded);
             };
 
             xhr.open('POST', url);
@@ -74,8 +62,5 @@ mergeInto(LibraryManager.library, {
         }
 
         return ctx;
-    },
-    cryptopp_rngseed: function(seedSize) {
-        return Module.randomDevice(seedSize);
     }
 });
