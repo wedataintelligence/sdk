@@ -1969,7 +1969,8 @@ bool MegaClient::dispatch(direction_t d)
         {
             if (!it->second->slot && it->second->bt.armed()
              && (nextit == transfers[d].end()
-              || it->second->bt.retryin() < nextit->second->bt.retryin()))
+              || it->second->bt.retryin() < nextit->second->bt.retryin())
+              || (it->second->asyncopencontext && it->second->asyncopencontext->finished))
             {
                 nextit = it;
             }
@@ -2049,16 +2050,47 @@ bool MegaClient::dispatch(direction_t d)
             app->transfer_prepare(nextit->second);
         }
 
+        bool openok;
+        bool openfinished = false;
+
         // verify that a local path was given and start/resume transfer
         if (nextit->second->localfilename.size())
         {
-            // allocate transfer slot
-            ts = new TransferSlot(nextit->second);
+            if (!nextit->second->slot)
+            {
+                // allocate transfer slot
+                ts = new TransferSlot(nextit->second);
+            }
+
+            if (ts->fa->asyncavailable())
+            {
+                if (!nextit->second->asyncopencontext)
+                {
+                    LOG_debug << "Starting async open";
+                    nextit->second->asyncopencontext = (d == PUT)
+                        ? ts->fa->asyncfopen(&nextit->second->localfilename, true, false)
+                        : ts->fa->asyncfopen(&nextit->second->localfilename, false, true);
+                }
+
+                if(nextit->second->asyncopencontext->finished)
+                {
+                    LOG_debug << "Async open finished";
+                    openok = !nextit->second->asyncopencontext->failed;
+                    openfinished = true;
+                    delete nextit->second->asyncopencontext;
+                    nextit->second->asyncopencontext = NULL;
+                }
+            }
+            else
+            {
+                openok = (d == PUT)
+                        ? ts->fa->fopen(&nextit->second->localfilename)
+                        : ts->fa->fopen(&nextit->second->localfilename, false, true);
+                openfinished = true;
+            }
 
             // try to open file (PUT transfers: open in nonblocking mode)
-            if ((d == PUT)
-              ? ts->fa->fopen(&nextit->second->localfilename)
-              : ts->fa->fopen(&nextit->second->localfilename, false, true))
+            if (openfinished && openok)
             {
                 handle h = UNDEF;
                 bool hprivate = true;
@@ -2132,10 +2164,13 @@ bool MegaClient::dispatch(direction_t d)
             }
         }
 
-        LOG_warn << "Error dispatching transfer";
+        if (openfinished && !openok)
+        {
+            LOG_warn << "Error dispatching transfer";
 
-        // file didn't open - fail & defer
-        nextit->second->failed(API_EREAD);
+            // file didn't open - fail & defer
+            nextit->second->failed(API_EREAD);
+        }
     }
 }
 

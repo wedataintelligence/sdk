@@ -40,6 +40,7 @@ Transfer::Transfer(MegaClient* cclient, direction_t ctype)
     metamac = 0;
     tag = 0;
     slot = NULL;
+    asyncopencontext = NULL;
     
     faputcompletion_it = client->faputcompletion.end();
 }
@@ -67,6 +68,8 @@ Transfer::~Transfer()
     {
         delete slot;
     }
+
+    delete asyncopencontext;
 }
 
 // transfer attempt failed, notify all related files, collect request on
