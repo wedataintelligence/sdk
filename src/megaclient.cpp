@@ -1967,9 +1967,9 @@ bool MegaClient::dispatch(direction_t d)
 
         for (transfer_map::iterator it = transfers[d].begin(); it != transfers[d].end(); it++)
         {
-            if (!it->second->slot && it->second->bt.armed()
+            if ((!it->second->slot && it->second->bt.armed()
              && (nextit == transfers[d].end()
-              || it->second->bt.retryin() < nextit->second->bt.retryin())
+              || it->second->bt.retryin() < nextit->second->bt.retryin()))
               || (it->second->asyncopencontext && it->second->asyncopencontext->finished))
             {
                 nextit = it;
