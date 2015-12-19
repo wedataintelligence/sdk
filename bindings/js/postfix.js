@@ -28,7 +28,7 @@
         }
         return device;
     })();
-    Module.mapMegaList = function mapMegaList(aMegaList, free, callback) {
+    function mapMegaList(aMegaList, free, callback) {
         var list = [];
         if (Object(aMegaList).isList) {
             if (typeof free === 'function') {
@@ -42,7 +42,8 @@
         }
         return list;
     };
-    Module.getMegaAccountList = function getMegaAccountList(type, obj) {
+    define('mapMegaList', mapMegaList);
+    function getMegaAccountList(type, obj) {
         var list = [];
         if (typeof obj['getNum' + type + 's'] === 'function') {
             var items = obj['getNum' + type + 's']() | 0;
@@ -52,15 +53,16 @@
             }
         }
         return list;
-    };
-    Module.getTreeInfo = function getTreeInfo(api, node) {
+    }
+    define('getMegaAccountList', getMegaAccountList);
+    function getTreeInfo(api, node) {
         var info = { bytes: 0, files: 0, folders: 0 };
         var proc = new MegaTreeProcessorInterface();
         proc.processMegaNode = function(node) {
             node = weakPointer(node, MegaNode);
             if (node.isFile()) {
                 info.files++;
-                info.bytes += Module.getUint64(node.getSize());
+                info.bytes += getUint64(node.getSize());
             }
             else {
                 info.folders++;
@@ -71,14 +73,15 @@
         info.folders--;
         proc.free();
         return info;
-    };
+    }
+    define('getTreeInfo', getTreeInfo);
     var ic = {
         Global: ["onUsersUpdate", "onNodesUpdate", "onAccountUpdate", "onContactRequestsUpdate", "onReloadNeeded"],
         Transfer: ["onTransferStart", "onTransferFinish", "onTransferUpdate", "onTransferData", "onTransferTemporaryError"],
         Request: ["onRequestStart", "onRequestFinish", "onRequestUpdate", "onRequestTemporaryError"]
     };
     ic['*'] = Object.keys(ic).reduce(function(d,a) { return d.concat(ic[a]) }, []);
-    Module.getMegaListener = function getMegaListener(aType, aListener) {
+    function getMegaListener(aType, aListener) {
         if (typeof aType === 'object') {
             aListener = aType;
             aType = '';
@@ -121,7 +124,7 @@
                             if (m === 'onTransferUpdate') {
                                 var size = a2.getDeltaSize();
                                 var voidPtr = a2.getLastBytes();
-                                a3 = Module.getArrayBuffer(voidPtr, size);
+                                a3 = getArrayBuffer(voidPtr, size);
                                 unwrapPointer(voidPtr);
                                 args[3] = size;
                             }
@@ -169,32 +172,56 @@
         fn = undefined;
 
         return l;
-    };
-    Module.getMegaListener.ifaces = ic;
+    }
+    getMegaListener.ifaces = ic;
     ic = undefined;
-    Module.getInt64 = function getInt64(value, unsigned) {
+    define('getMegaListener', getMegaListener);
+    function getInt64(value, unsigned) {
         var tempRet0 = Module.Runtime.getTempRet0();
         return Module.Runtime.makeBigInt(value, tempRet0, unsigned);
-    };
-    Module.getUint64 = function getUint64(value) {
-        return Module.getInt64(value, true);
-    };
-    Module.getArrayBuffer = function(ptr, size) {
+    }
+    define('getInt64', getInt64);
+    function getUint64(value) {
+        return getInt64(value, true);
+    }
+    define('getUint64', getUint64);
+    function getArrayBuffer(ptr, size) {
         if (ptr && typeof ptr === 'object') ptr = ptr.ptr;
         return new Uint8Array(Module.HEAPU8.buffer, ptr | 0, size | 0);
-    };
-    Module.formatBytes = function formatBytes(a) {
+    }
+    define('getArrayBuffer', getArrayBuffer);
+    function neuterArrayBuffer(ab) {
+        if (!(ab instanceof ArrayBuffer)) {
+            ab = ab && ab.buffer;
+        }
+        try {
+            if (typeof ArrayBuffer.transfer === 'function') {
+                ArrayBuffer.transfer(ab, 0); // ES7
+            }
+            else {
+                if (!neuterArrayBuffer.dataWorker) {
+                    neuterArrayBuffer.dataWorker = new Worker("data:application/javascript,var%20d%3B");
+                }
+                neuterArrayBuffer.dataWorker.postMessage(ab, [ab]);
+            }
+        }
+        catch (ex) {}
+    }
+    define('neuterArrayBuffer', neuterArrayBuffer);
+    function formatBytes(a) {
         var b = ["bytes", "KB", "MB", "GB", "TB", "PB", "EB"];
         if (a === 0) {
             return a + " " + b[1];
         }
         var c = Math.floor(Math.log(a) / Math.log(1024));
         return (a / Math.pow(1024, Math.floor(c))).toFixed(2) + " " + b[c];
-    };
-    Module.timeStampToDate = function timeStampToDate(time, iso) {
+    }
+    define('formatBytes', formatBytes);
+    function timeStampToDate(time, iso) {
         var date = new Date((time | 0) * 1000);
         if (iso) date = date.toISOString();
         return date;
-    };
+    }
+    define('timeStampToDate', timeStampToDate);
     return Module;
 }));
