@@ -432,6 +432,12 @@ void Transfer::complete()
 
 #ifndef EMSCRIPTEN
         // files must not change during a PUT transfer
+        if (slot->fa->asyncavailable())
+        {
+            slot->fa->closef();
+            slot->fa->fopen(&localfilename);
+        }
+
         if (genfingerprint(slot->fa, true))
         {
             return failed(API_EREAD);
