@@ -2069,7 +2069,7 @@ bool MegaClient::dispatch(direction_t d)
                     LOG_debug << "Starting async open";
                     nextit->second->asyncopencontext = (d == PUT)
                         ? ts->fa->asyncfopen(&nextit->second->localfilename, true, false)
-                        : ts->fa->asyncfopen(&nextit->second->localfilename, false, true);
+                        : ts->fa->asyncfopen(&nextit->second->localfilename, false, true, nextit->second->size);
                 }
 
                 if(nextit->second->asyncopencontext->finished)
