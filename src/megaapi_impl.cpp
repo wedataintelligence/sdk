@@ -2282,6 +2282,7 @@ void MegaFileGet::prepare()
     {
         transfer->localfilename = localname;
 
+#ifndef EMSCRIPTEN
         size_t index =  string::npos;
         while ((index = transfer->localfilename.rfind(transfer->client->fsaccess->localseparator, index)) != string::npos)
         {
@@ -2301,6 +2302,7 @@ void MegaFileGet::prepare()
         string suffix;
         transfer->client->fsaccess->tmpnamelocal(&suffix);
         transfer->localfilename.append(suffix);
+#endif
     }
 }
 

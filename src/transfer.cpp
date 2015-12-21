@@ -233,6 +233,7 @@ void Transfer::complete()
                 success = false;
                 localname = (*it)->localname;
 
+#ifndef EMSCRIPTEN
                 fa = client->fsaccess->newfileaccess();
                 if (fa->fopen(&localname))
                 {
@@ -335,6 +336,7 @@ void Transfer::complete()
                     it++;
                     continue;
                 }
+#endif
 
                 if (!tmplocalname.size())
                 {
