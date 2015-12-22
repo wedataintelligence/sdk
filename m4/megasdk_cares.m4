@@ -38,7 +38,9 @@ AC_ARG_WITH([cares],
     CARES_LDFLAGS="-L$with_cares/lib"
     CARES_FLAGS="-I$with_cares/include"
 
-    AC_CHECK_HEADERS([ares.h], [],
+    AC_CHECK_HEADERS([ares.h],
+         CARES_CXXFLAGS="-I$with_cares/include"
+         CARES_CPPFLAGS="-I$with_cares/include",
         AC_MSG_ERROR([ares.h header not found or not usable])
     )
     AC_CHECK_LIB(cares, [ares_library_init], [CARES_LIBS="-lcares"],
@@ -49,11 +51,6 @@ AC_ARG_WITH([cares],
     AC_SUBST(CARES_LDFLAGS)
     AC_SUBST(CARES_LIBS)
     cares=true
-
-    #restore
-    LDFLAGS=$SAVE_LDFLAGS
-    CXXFLAGS=$SAVE_CXXFLAGS
-    CPPFLAGS=$SAVE_CPPFLAGS
     ;;
    esac
   ],
@@ -72,17 +69,19 @@ AC_ARG_WITH([cares],
   ]
 )
 
+SDK_CXXFLAGS="$SDK_CXXFLAGS $CARES_CXXFLAGS"
+SDK_CPPFLAGS="$SDK_CPPFLAGS $CARES_CPPFLAGS"
+SDK_LDFLAGS="$SDK_LDFLAGS $CARES_LDFLAGS"
+SDK_LIBS="$SDK_LIBS $CARES_LIBS"
+
 # if test
 fi
 
 # define on all platforms
 if test "x$cares" = "xtrue" ; then
     AC_DEFINE(USE_CARES, [1], [Define to use c-ares])
-else
-    AC_DEFINE(USE_CARES, [0], [Define to use c-ares])
 fi
 AM_CONDITIONAL(HAVE_CARES, test x$cares = xtrue)
-
 
 #restore
 LDFLAGS="$SAVE_LDFLAGS"

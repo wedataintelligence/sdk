@@ -68,6 +68,7 @@ AC_ARG_WITH(sodium,
     AC_CHECK_HEADERS([sodium/core.h], [sodium=true], [])
     AC_CHECK_LIB(sodium, [sodium_init], [SODIUM_LIBS="-lsodium"],[])
     ]
+    sodium=true
   )
 
 SDK_CXXFLAGS="$SDK_CXXFLAGS $SODIUM_CXXFLAGS"
@@ -80,8 +81,6 @@ fi
 
 if test "x$sodium" = "xtrue" ; then
     AC_DEFINE(USE_SODIUM, [1], [Define to use libsodium])
-else
-    AC_DEFINE(USE_SODIUM, [0], [Define to use libsodium])
 fi
 AM_CONDITIONAL([USE_SODIUM], [test "x$sodium" = "xtrue"])
 

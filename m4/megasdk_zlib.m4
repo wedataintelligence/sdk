@@ -78,6 +78,7 @@ AC_ARG_WITH(zlib,
     AC_CHECK_LIB(z, [main], [ZLIB_LIBS="-lz"],[
             AC_MSG_ERROR([Could not find zlib])
     ])
+    zlib=true
   ])
 
 SDK_CXXFLAGS="$SDK_CXXFLAGS $ZLIB_CXXFLAGS"
@@ -90,8 +91,6 @@ fi
 
 if test "x$zlib" = "xtrue" ; then
     AC_DEFINE(USE_ZLIB, [1], [Define to use zlib])
-else
-    AC_DEFINE(USE_ZLIB, [0], [Define to use zlib])
 fi
 AM_CONDITIONAL([USE_ZLIB], [test "x$zlib" = "xtrue"])
 

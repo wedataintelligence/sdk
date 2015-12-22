@@ -253,6 +253,14 @@ if test x$enable_megaapi = xyes; then
 fi
 AM_CONDITIONAL([BUILD_MEGAAPI], [test "$enable_megaapi" = "yes"])
 
+# Chat
+AC_ARG_ENABLE(chat,
+    AS_HELP_STRING([--enable-chat], [enable chat support]),
+    [], [enable_chat=no])
+if test "x$enable_chat" = "xyes" ; then
+    AC_DEFINE(ENABLE_CHAT, 1, [Define to enable chat])
+fi
+
 # determine platform include path
 if test "x$WIN32" = "xyes" ; then
     platform_include="mega/win32"
@@ -317,6 +325,8 @@ MEGASDK_CHECK_SSL
 MEGASDK_CHECK_CARES
 MEGASDK_CHECK_CURL
 MEGASDK_CHECK_WINHTTP
+
+# example applications
 MEGASDK_CHECK_EXAMPLES
 
 ## Bindings
@@ -338,6 +348,11 @@ if test "x$enable_tests" = "xyes" ; then
 fi
 AM_CONDITIONAL([BUILD_TESTS], [test "$enable_tests" = "yes"])
 AC_MSG_RESULT([$enable_tests])
+
+AC_SUBST(SDK_CPPFLAGS)
+AC_SUBST(SDK_CXXFLAGS)
+AC_SUBST(SDK_LDFLAGS)
+AC_SUBST(SDK_LIBS)
 
 dnl #########################################################################
 dnl Doxygen settings

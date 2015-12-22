@@ -96,8 +96,6 @@ fi
 
 if test "x$freeimage" = "xtrue" ; then
     AC_DEFINE(USE_FREEIMAGE, [1], [Define to use FreeImage library.])
-else
-    AC_DEFINE(USE_FREEIMAGE, [0], [Define to use FreeImage library.])
 fi
 AM_CONDITIONAL([USE_FREEIMAGE], [test "x$freeimage" = "xtrue"])
 

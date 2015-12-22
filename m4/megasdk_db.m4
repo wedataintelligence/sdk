@@ -160,9 +160,7 @@ fi
 
 if test "x$sqlite" = "xtrue" ; then
     AC_DEFINE(USE_SQLITE, [1], [Define to use SQLite])
-    AC_DEFINE(USE_DB, [0], [Define to use Berkeley DB])
 else
-    AC_DEFINE(USE_SQLITE, [0], [Define to use SQLite])
     AC_DEFINE(USE_DB, [1], [Define to use Berkeley DB])
 fi
 AM_CONDITIONAL(USE_SQLITE, test x$sqlite = xtrue)

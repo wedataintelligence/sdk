@@ -73,6 +73,7 @@ AC_ARG_WITH(cryptopp,
     AC_CHECK_LIB(cryptopp, [main], [CRYPTO_LIBS="-lcryptopp"],[
             AC_MSG_ERROR([Could not find libcryptopp])
     ])
+    cryptopp=true
   ])
 
 SDK_CXXFLAGS="$SDK_CXXFLAGS $CRYPTO_CXXFLAGS"
@@ -85,8 +86,6 @@ fi
 
 if test "x$cryptopp" = "xtrue" ; then
     AC_DEFINE(USE_CRYPTOPP, [1], [Define to use libcryptopp])
-else
-    AC_DEFINE(USE_CRYPTOPP, [0], [Define to use libcryptopp])
 fi
 AM_CONDITIONAL([USE_CRYPTOPP], [test "x$cryptopp" = "xtrue"])
 
