@@ -33,9 +33,16 @@ examples_megasimplesync_CXXFLAGS = $(SDK_CXXFLAGS)
 examples_megasimplesync_LDADD = $(LIBS_EXTRA) $(SDK_LDFLAGS) $(SDK_LIBS) $(top_builddir)/src/libmega.la
 
 if BUILD_FUSE_EXAMPLE
-examples_linux_megafuse_SOURCES =  examples/linux/megafuse.cpp
+examples_linux_megafuse_SOURCES = examples/linux/megafuse.cpp
 examples_linux_megafuse_CXXFLAGS = $(FUSE_CXXFLAGS) $(SDK_CXXFLAGS)
-examples_linux_megafuse_LDADD = $(LIBS_EXTRA) $(SDK_LDFLAGS) $(SDK_LIBS)  $(top_builddir)/src/libmega.la $(FUSE_LDFLAGS) $(FUSE_LIBS)
+examples_linux_megafuse_LDADD = $(LIBS_EXTRA) $(SDK_LDFLAGS) $(SDK_LIBS) $(FUSE_LDFLAGS) $(FUSE_LIBS) $(top_builddir)/src/libmega.la
+
+if ENABLE_STATIC
+if ! DARWIN
+examples_linux_megafuse_LDFLAGS = -Wl,-static -all-static
+endif
+endif
+
 endif
 
 endif

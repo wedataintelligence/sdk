@@ -200,14 +200,6 @@ if test "x$enable_examples" = "xyes" ; then
        esac
       ],
       [AC_MSG_RESULT([--with-fuse not specified])
-        CXXFLAGS="$CXXFLAGS -D_FILE_OFFSET_BITS=64"
-        AC_CHECK_HEADERS([fuse.h], [
-            USE_FUSE=1
-            FUSE_CXXFLAGS="-D_FILE_OFFSET_BITS=64 -std=c++11"],
-            [USE_FUSE=0]
-        )
-        AC_CHECK_LIB([fuse], [fuse_main], [FUSE_LIBS="-lfuse"], [USE_FUSE=0])
-        CXXFLAGS=$SAVE_CXXFLAGS
       ]
       )
 
