@@ -2061,6 +2061,10 @@ bool MegaClient::dispatch(direction_t d)
                 // allocate transfer slot
                 ts = new TransferSlot(nextit->second);
             }
+            else
+            {
+                ts = nextit->second->slot;
+            }
 
             if (ts->fa->asyncavailable())
             {
