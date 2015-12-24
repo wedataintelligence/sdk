@@ -10,6 +10,7 @@ SAVE_CXXFLAGS="$CXXFLAGS"
 SAVE_CPPFLAGS="$CPPFLAGS"
 
 sqlite=false
+db=false
 if test "x$check_db" = "xtrue"; then
 
 AC_MSG_CHECKING(for SQLite)
@@ -79,7 +80,6 @@ AC_SUBST(DB_CPPFLAGS)
 AC_SUBST(DB_LDFLAGS)
 
 # Berkeley DB
-db=false
 AC_MSG_CHECKING(for Berkeley DB)
 AC_ARG_WITH(db,
   AS_HELP_STRING(--with-db=PATH, base of Berkeley DB installation),
@@ -155,14 +155,15 @@ SDK_CPPFLAGS="$SDK_CPPFLAGS $CPPFLAGS"
 SDK_LDFLAGS="$SDK_LDFLAGS $DB_LDFLAGS"
 SDK_LIBS="$SDK_LIBS $DB_LIBS"
 
-# if test
-fi
-
 if test "x$sqlite" = "xtrue" ; then
     AC_DEFINE(USE_SQLITE, [1], [Define to use SQLite])
 else
     AC_DEFINE(USE_DB, [1], [Define to use Berkeley DB])
 fi
+
+# if test
+fi
+
 AM_CONDITIONAL(USE_SQLITE, test x$sqlite = xtrue)
 AM_CONDITIONAL(USE_DB, test "x$db = xtrue")
 

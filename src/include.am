@@ -8,6 +8,10 @@ else
 src_libmega_la_CXXFLAGS = $(SDK_CXXFLAGS)
 endif
 
+if BUILD_JS
+src_libmega_la_CXXFLAGS += $(EMSCRIPTEN_FLAGS)
+endif
+
 # Libs
 if WIN32
 src_libmega_la_LIBADD = $(LIBS_EXTRA) $(SDK_LDFLAGS) $(SDK_LIBS)
@@ -81,7 +85,16 @@ src_libmega_la_SOURCES+= src/win32/net.cpp
 src_libmega_la_SOURCES+= src/win32/waiter.cpp
 src_libmega_la_SOURCES+= src/win32/consolewaiter.cpp
 
-# posix sources
+else
+
+if BUILD_JS
+src_libmega_la_SOURCES += src/js/fs.cpp
+src_libmega_la_SOURCES += src/js/console.cpp
+src_libmega_la_SOURCES += src/js/net.cpp
+src_libmega_la_SOURCES += src/js/waiter.cpp
+src_libmega_la_SOURCES += src/js/consolewaiter.cpp
+
+# Posix
 else
 src_libmega_la_SOURCES += src/js/fs.cpp
 src_libmega_la_SOURCES += src/js/console.cpp
@@ -91,5 +104,6 @@ src_libmega_la_SOURCES += src/js/consolewaiter.cpp
 
 src_libmega_la_SOURCES += src/thread/posixthread.cpp
 
+endif
 endif
 

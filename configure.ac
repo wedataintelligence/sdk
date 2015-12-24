@@ -234,15 +234,6 @@ if test x$enable_gcc_hardening != xno; then
 ])
 fi
 
-# sync subsystem
-AC_ARG_ENABLE(sync,
-    AS_HELP_STRING([--enable-sync], [include sync subsystem [default=yes]]),
-    [enable_sync=$enableval],
-    [enable_sync=yes])
-if test x$enable_sync = xyes; then
-    AC_DEFINE(ENABLE_SYNC, 1, [Defined if sync subsystem is enabled])
-fi
-
 # MEGA API
 AC_ARG_ENABLE(megaapi,
     AS_HELP_STRING([--disable-megaapi], [disable MEGA API support]),
@@ -276,6 +267,7 @@ SDK_LDFLAGS=""
 SDK_LIBS=""
 
 # default values
+check_sync=true
 check_cryptopp=true
 check_zlib=true
 check_freeimage=true
@@ -306,6 +298,7 @@ MEGASDK_CHECK_JS
 
 # disable for dependency checking when JS bindings is enabled
 if test "x$enable_javascript" = "xyes" ; then
+    check_sync=false
     check_zlib=false
     check_db=false
     check_ssl=false
@@ -314,6 +307,9 @@ if test "x$enable_javascript" = "xyes" ; then
     check_freeimage=false
     check_examples=false
 fi
+
+# features checking
+MEGASDK_CHECK_SYNC
 
 # dependencies checking
 MEGASDK_CHECK_CRYPTOPP

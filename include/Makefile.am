@@ -63,6 +63,18 @@ nobase_libmegainclude_HEADERS += \
 	mega/win32/megaconsole.h \
 	mega/win32/megaconsolewaiter.h
 else
+
+if BUILD_JS
+nobase_libmegainclude_HEADERS += \
+	mega/js/megasys.h \
+	mega/js/megafs.h \
+	mega/js/meganet.h \
+	mega/js/megawaiter.h \
+	mega/js/megaconsole.h \
+	mega/js/megaconsolewaiter.h
+
+# Posix
+else
 nobase_libmegainclude_HEADERS += \
 	mega/posix/megasys.h \
 	mega/posix/megafs.h \
@@ -70,6 +82,7 @@ nobase_libmegainclude_HEADERS += \
 	mega/posix/megawaiter.h \
 	mega/posix/megaconsole.h \
 	mega/posix/megaconsolewaiter.h
+endif
 endif
 
 #noinst_HEADERS = config.h

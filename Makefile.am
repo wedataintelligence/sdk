@@ -30,7 +30,11 @@ include m4/aminclude.am
 if WIN32
 AM_CPPFLAGS+=-I$(top_srcdir)/include/mega/win32
 else
+if BUILD_JS
 AM_CPPFLAGS+=-I$(top_srcdir)/include/mega/js
+else
+AM_CPPFLAGS+=-I$(top_srcdir)/include/mega/posix
+endif
 endif
 
 VERSION_INFO=$(LT_CURRENT):$(LT_REVISION):$(LT_AGE)
@@ -41,12 +45,12 @@ BUILT_SOURCES=
 noinst_PROGRAMS=
 EXTRA_DIST =
 
-if BUILD_JS
-include src/js/include.am
-else
 include src/include.am
 include examples/include.am
 include tests/include.am
+
+if BUILD_JS
+include bindings/js/include.am
 endif
 
 if BUILD_PYTHON
@@ -77,7 +81,11 @@ DISTCLEANFILES+=*~ libmega.pc
 if WIN32
 platform_includes=$(top_srcdir)/include/mega/win32
 else
+if BUILD_JS
+platform_includes=$(top_srcdir)/include/mega/js
+else
 platform_includes=$(top_srcdir)/include/mega/posix
+endif
 endif
 
 CPPCHECK_CMD = cppcheck \
