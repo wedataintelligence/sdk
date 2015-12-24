@@ -96,11 +96,11 @@ src_libmega_la_SOURCES += src/js/consolewaiter.cpp
 
 # Posix
 else
-src_libmega_la_SOURCES += src/js/fs.cpp
-src_libmega_la_SOURCES += src/js/console.cpp
-src_libmega_la_SOURCES += src/js/net.cpp
-src_libmega_la_SOURCES += src/js/waiter.cpp
-src_libmega_la_SOURCES += src/js/consolewaiter.cpp
+src_libmega_la_SOURCES += src/posix/fs.cpp
+src_libmega_la_SOURCES += src/posix/console.cpp
+src_libmega_la_SOURCES += src/posix/net.cpp
+src_libmega_la_SOURCES += src/posix/waiter.cpp
+src_libmega_la_SOURCES += src/posix/consolewaiter.cpp
 
 src_libmega_la_SOURCES += src/thread/posixthread.cpp
 
