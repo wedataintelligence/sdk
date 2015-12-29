@@ -307,6 +307,9 @@ public:
     // select the upload port automatically
     bool autoupport;
 
+    // finish downloaded chunks in order
+    bool orderdownloadedchunks;
+
     // disable public key pinning (for testing purposes)
     static bool disablepkp;
 

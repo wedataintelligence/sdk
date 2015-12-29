@@ -624,10 +624,12 @@ MegaClient::MegaClient(MegaApp* a, Waiter* w, HttpIO* h, FileSystemAccess* f, Db
     autodownport = true;
     autoupport = true;
     usehttps = false;
+    orderdownloadedchunks = false;
 #else
     autodownport = false;
     autoupport = false;
     usehttps = true;
+    orderdownloadedchunks = true;
 #endif
     
     fetchingnodes = false;

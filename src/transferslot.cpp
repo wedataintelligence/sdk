@@ -196,6 +196,13 @@ void TransferSlot::doio(MegaClient* client)
                     break;
 
                 case REQ_SUCCESS:
+                    if (client->orderdownloadedchunks && transfer->type == GET && progresscompleted != ((HttpReqDL *)reqs[i])->dlpos)
+                    {
+                        // postponing unsorted chunk
+                        p += reqs[i]->size;
+                        break;
+                    }
+
                     lastdata = Waiter::ds;
 
                     progresscompleted += reqs[i]->size;
@@ -249,6 +256,9 @@ void TransferSlot::doio(MegaClient* client)
                                 }
 
                                 progresscompleted -= reqs[i]->size;
+                                p += reqs[i]->size;
+
+                                LOG_debug << "Writting data asynchronously at " << ((HttpReqDL *)reqs[i])->dlpos;
                                 asyncIO[i] = fa->asyncfwrite(reqs[i]->buf, reqs[i]->bufpos, ((HttpReqDL *)reqs[i])->dlpos);
                                 reqs[i]->status = REQ_ASYNCIO;
                             }
@@ -344,6 +354,14 @@ void TransferSlot::doio(MegaClient* client)
                                     }
                                 }
                                 reqs[i]->status = REQ_READY;
+                                if (client->orderdownloadedchunks)
+                                {
+                                    // Check connections again looking for postponed chunks
+                                    delete asyncIO[i];
+                                    asyncIO[i] = NULL;
+                                    i = connections;
+                                    continue;
+                                }
                             }
                             delete asyncIO[i];
                             asyncIO[i] = NULL;
@@ -362,6 +380,10 @@ void TransferSlot::doio(MegaClient* client)
                             reqs[i]->status = transfer->type == PUT ? REQ_READY : REQ_SUCCESS;
                             backoff = 2;
                         }
+                    }
+                    else
+                    {
+                        p += asyncIO[i]->len;
                     }
                     break;
 
