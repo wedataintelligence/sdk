@@ -8590,9 +8590,9 @@ bool MegaClient::startxfer(direction_t d, File* f, bool skipdupes)
 {
     if (!f->transfer)
     {
-#ifndef EMSCRIPTEN
         if (d == PUT)
         {
+#ifndef EMSCRIPTEN
             if (!f->isvalid)    // (sync LocalNodes always have this set)
             {
                 // missing FileFingerprint for local file - generate
@@ -8612,8 +8612,19 @@ bool MegaClient::startxfer(direction_t d, File* f, bool skipdupes)
                 LOG_err << "Unable to get a fingerprint " << f->name;
                 return false;
             }
-        }
+#else
+            FileAccess* fa = fsaccess->newfileaccess();
+            if(!fa->fopen(&f->localname))
+            {
+                LOG_err << "Unable to open the file " << f->name;
+                delete fa;
+                return false;
+            }
+            f->mtime = fa->mtime;
+            f->size = fa->size;
+            delete fa;
 #endif
+        }
         
         if (!f->isvalid)
         {
