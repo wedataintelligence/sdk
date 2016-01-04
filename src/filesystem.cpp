@@ -216,7 +216,7 @@ void FileAccess::asyncopfinished(void *param)
     }
 }
 
-AsyncIOContext *FileAccess::asyncfopen(string *f, bool read, bool write, m_off_t size)
+AsyncIOContext *FileAccess::asyncfopen(string *f, bool read, bool write, TransferSlot *ts)
 {
     LOG_verbose << "Async open start";
     AsyncIOContext *context = newasynccontext();
@@ -230,7 +230,13 @@ AsyncIOContext *FileAccess::asyncfopen(string *f, bool read, bool write, m_off_t
     context->waiter = waiter;
     context->userCallback = asyncopfinished;
     context->userData = context;
-    context->pos = size;
+    context->fa = this;
+
+    if (write)
+    {
+        this->size = ts->transfer->size;
+        this->mtime = ts->transfer->mtime;
+    }
 
     asyncsysopen(context);
     return context;
@@ -261,6 +267,7 @@ AsyncIOContext *FileAccess::asyncfread(string *dst, unsigned len, unsigned pad, 
     context->waiter = waiter;
     context->userCallback = asyncopfinished;
     context->userData = context;
+    context->fa = this;
 
     asyncsysread(context);
     return context;
@@ -289,6 +296,7 @@ AsyncIOContext *FileAccess::asyncfwrite(const byte* data, unsigned len, m_off_t 
     context->waiter = waiter;
     context->userCallback = asyncopfinished;
     context->userData = context;
+    context->fa = this;
 
     asyncsyswrite(context);
     return context;

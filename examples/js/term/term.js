@@ -1,8 +1,40 @@
+var accesslevels = [ "read-only", "read/write", "full access" ];
+
 function MegaTerminalListener(aClient, aTerm, aCallback) {
     var self = this;
     var listener = MEGASDK.getMegaListener({
         onRequestFinish: function(api, request, error) {
             self.abort(request, error.getErrorCode());
+        },
+        onTransferUpdate: function(api, transfer) {
+            var speed = MEGASDK.formatBytes(MEGASDK.getUint64(transfer.getSpeed()));
+            var size = MEGASDK.getUint64(transfer.getTotalBytes());
+            var offset = MEGASDK.getUint64(transfer.getTransferredBytes());
+
+            _term.echo('[[;#11bc78;]' + termEscape(transfer.getPath()
+                + ': transfered ' + offset + ' of ' + size
+                + ' bytes. ('+~~(offset*100/size)+'%, '+speed+'/s)') + ']');
+            $(window).trigger('resize');
+        },
+        onTransferStart: function(api, transfer) {
+            var dir = (transfer.getTransferString() == "DOWNLOAD" ? "Incoming" : "Outgoing");
+
+            _term.echo('[[;#11bc78;]' + termEscape(transfer.getPath()
+                + ': ' + dir + ' file transfer starting.') + ']');
+        },
+        onTransferTemporaryError: function(api, transfer, error) {
+
+        },
+        onTransferFinish: function(api, transfer, error) {
+            var ec = error.getErrorCode();
+            error = error.getErrorString();
+
+            if (ec !== MEGASDK.MegaError.API_OK) {
+                _term.echo('TRANSFER "' + transfer.getPath() + '" FAILED: ' + error);
+            }
+            else {
+                this.onTransferUpdate(api, transfer);
+            }
         }
     });
     aClient.addListener(listener);
@@ -26,22 +58,87 @@ function MegaTerminalListener(aClient, aTerm, aCallback) {
     };
 }
 
-var accesslevels = [ "read-only", "read/write", "full access" ];
+function dumptreeFormatResult(lines, foldersFirst)
+{
+    var result = [];
+    var sizelen = 11;
+    var fnlen = Math.min(80, lines.maxNameLen + 3);
+    delete lines.maxNameLen;
+
+    if (foldersFirst) {
+        var files = [], folders = [], nop = [];
+        for (var i in lines) {
+            if (typeof lines[i] !== 'object') nop.push(lines[i]);
+            else if (lines[i].size) files.push(lines[i]);
+            else folders.push(lines[i]);
+        }
+        lines = folders.concat(files, nop);
+    }
+
+    for (var ln in lines)
+    {
+        ln = lines[ln];
+
+        if (typeof ln !== 'object') {
+            result.push(ln);
+        }
+        else {
+            var fl = Math.max(10, fnlen - (ln.depth * 3));
+            var line = [Array(ln.depth).join("   ")];
+            var raw = [(ln.name + Array(fl).join(" ")).slice(0, fl)];
+
+            if (ln.size) {
+                line.push('&#128196;');
+                raw.push((Array(sizelen).join(" ") + ln.size).slice(-sizelen));
+            }
+            else {
+                line.push("&#128193;");
+                raw.push(Array(sizelen+1).join(" "));
+            }
+
+            line.push("");
+            raw.push(ln.mtime);
+            raw.push(ln.handle);
+            if (ln.hash) {
+                raw.push(ln.hash);
+            }
+            raw.push(ln.comm);
+
+            line = (line.join(" ") + termEscape(raw.join(" ")));
+            if (result.length % 2) line = '[[;;#1e1e1f]' + line + ']';
+            result.push(line);
+        }
+    }
+
+    return result;
+}
 function dumptree(api, lines, n, recurse, depth)
 {
-    depth = depth || 0;
+    depth = depth | 0;
+    lines.maxNameLen |= 0;
 
     // console.debug('dumptree', n.getName(), recurse, depth);
 
     if (depth)
     {
         var title = n.getName() || "CRYPTO_ERROR";
-        var line = title + ' (';
+        var line = {
+            name: title,
+            handle: n.getBase64Handle(),
+            comm: '',
+            depth: depth
+        };
+
+        if (title.length > lines.maxNameLen) {
+            lines.maxNameLen = title.length;
+        }
 
         switch (n.getType())
         {
             case MEGASDK.MegaNode.TYPE_FILE:
-                line += MEGASDK.formatBytes(MEGASDK.getUint64(n.getSize()));
+                line.size = MEGASDK.formatBytes(MEGASDK.getUint64(n.getSize()));
+                line.mtime = n.getModificationTime();
+                // line.hash = api.getFingerprint(n);
 
                 // const char* p;
                 // if ((p = strchr(n->fileattrstring.c_str(), ':')))
@@ -51,43 +148,49 @@ function dumptree(api, lines, n, recurse, depth)
 
                 if (n.isExported())
                 {
-                    line += ", shared as exported";
+                    line.comm += "Shared as exported";
                     if (n.getExpirationTime() > 0)
                     {
-                        line += " temporal";
+                        line.comm += " temporal";
                     }
                     else
                     {
-                        line += " permanent";
+                        line.comm += " permanent";
                     }
-                    line += " file link";
+                    line.comm += " file link";
+                    var et = n.getExpirationTime();
+                    if (et > 0) {
+                        line.comm += ' (expires on ' + MEGASDK.timeStampToDate(et) + ')';
+                    }
                 }
                 break;
 
             case MEGASDK.MegaNode.TYPE_FOLDER:
-                line += "folder";
+                line.mtime = n.getCreationTime();
 
                 if (n.isOutShare())
                 {
                     MEGASDK.mapMegaList(api.getOutShares(n), function(share) {
                         if (share.getUser()) {
-                            line += ", shared with " + share.getUser()
+                            if (line.comm) line.comm += ', ';
+                            line.comm += "Shared with " + share.getUser()
                                 + ", access " + accesslevels[share.getAccess()];
                         }
                     });
 
                     if (n.isExported())
                     {
-                        line += ", shared as exported";
+                        if (line.comm) line.comm += ', ';
+                        line.comm += "Shared as exported";
                         if (n.getExpirationTime() > 0)
                         {
-                            line += " temporal";
+                            line.comm += " temporal";
                         }
                         else
                         {
-                            line += " permanent";
+                            line.comm += " permanent";
                         }
-                        line += " folder link";
+                        line.comm += " folder link";
                     }
                 }
 
@@ -95,7 +198,8 @@ function dumptree(api, lines, n, recurse, depth)
                 {
                     MEGASDK.mapMegaList(api.getPendingOutShares(n), function(share) {
                         // XXX: is this ok? Ie, pcr->targetemail
-                        line += ", shared (still pending) with " << share.getUser() + ", access "
+                        if (line.comm) line.comm += ', ';
+                        line.comm += "Shared (still pending) with " << share.getUser() + ", access "
                                 + accesslevels[share.getAccess()];
                     });
                     // for (share_map::iterator it = n->pendingshares->begin(); it != n->pendingshares->end(); it++)
@@ -110,16 +214,19 @@ function dumptree(api, lines, n, recurse, depth)
 
                 if (n.isInShare())
                 {
-                    line += ", inbound " << accesslevels[api.getAccess(n)] + " share";
+                    if (line.comm) line.comm += ', ';
+                    line.comm += "Inbound " << accesslevels[api.getAccess(n)] + " share";
                 }
                 break;
 
             default:
-                line += "unsupported type, please upgrade";
+                line.comm += " -- unsupported type, please upgrade";
         }
 
-        line += ")" + (n.hasChanged(MEGASDK.MegaNode.CHANGE_TYPE_REMOVED) ? " (DELETED)" : "");
-        if (4e3 === lines.push(Array(depth).join("    ") + termEscape(line))) {
+        line.mtime = MEGASDK.timeStampToDate(line.mtime, 1).replace('T', ' ').replace('.000Z', '');
+        line.comm += (n.hasChanged(MEGASDK.MegaNode.CHANGE_TYPE_REMOVED) ? " (DELETED)" : "");
+
+        if (4e3 === lines.push(/*Array(depth).join("    ") + termEscape*/(line))) {
             // XXX: jquery.terminal.js seem to have troubles handling too many entries, and
             //      using his flush capabilities does not help since their cache seem buggy...
             lines.push('[[;#fe1112;] -- Too many entries, output truncated.]');
@@ -147,6 +254,7 @@ function dumptree(api, lines, n, recurse, depth)
 
 function termEscape(str) {
     return String(str).replace(/\W/g, function(ch) {
+        if (ch === ' ') return '&nbsp;';
         return '&#' + ch.charCodeAt(0) + ';';
     });
 }
@@ -154,6 +262,7 @@ function termEscape(str) {
 var cwd = false;
 var debug = false;
 var quiet = false;
+var _term;
 MEGASDK.Terminal = function (client) {
     var $e = $('#terminal').empty();
 
@@ -687,6 +796,7 @@ MEGASDK.Terminal = function (client) {
                 var lines = [];
                 console.time('dumptree');
                 dumptree(client, lines, node, recursive, 0);
+                lines = dumptreeFormatResult(lines, !recursive);
                 console.timeEnd('dumptree');
                 for (var i in lines) {
                     term.echo(lines[i]);
@@ -694,18 +804,43 @@ MEGASDK.Terminal = function (client) {
                 listener.abort(null, MEGASDK.MegaError.API_OK);
             }
         }
-        else if (cmd === 'getq') {
+        else if (cmd === 'put') {
+            var target = cwd;
+
+            if (argv.length) {
+                target = client.getNodeByPath(argv[0], cwd);
+
+                if (!target.isValid || target.isFile()) {
+                    assert(false, argv[0] + ': Not a directory.');
+                    return listener.abort();
+                }
+            }
+
+            $('#uploader').show();
+            $(window).one('startUpload', function(ev, file) {
+                if (file instanceof File) {
+                    _term = term;
+                    client.startUpload(file, target);
+                }
+            });
+            listener.abort(null, MEGASDK.MegaError.API_OK);
+        }
+        else if (cmd === 'getq' || cmd === 'putq') {
             var cancel = argv.length ? +argv[0] : -1;
             var tfs = client.getTransfers();
             var stm = client.getStreamingTransfers();
+            var wts = cmd === 'getq' ? 'DOWNLOAD':'UPLOAD';
 
             [].concat(tfs.toArray(), stm.toArray())
                 .forEach(function(it) {
+                    var ts = it.getTransferString();
+                    if (wts !== ts) return;
+
                     var line = [];
                     var tag = it.getTag();
 
                     line.push(tag + ': ' + it.getFileName());
-                    line.push('['+it.getTransferString()+']');
+                    line.push('['+ts+']');
 
                     if (cancel === tag) {
                         line.push('Canceling...');
@@ -720,6 +855,20 @@ MEGASDK.Terminal = function (client) {
                 listener.abort(null, MEGASDK.MegaError.API_OK);
         }
         else if (cmd === 'get') {
+            argv = argv.map(String);
+            var a1 = String(argv[0]);
+            var node = client.getNodeByPath(a1, cwd);
+            if (!node.isValid || !node.isFile()) {
+                assert(false, a1 + ': No such file.');
+                listener.abort();
+            }
+            else {
+                client.startDownload(node, '/');
+                listener.abort(null, MEGASDK.MegaError.API_OK);
+            }
+            _term = term;
+        }
+        else if (cmd === 'gets') { // old `get`, streaming based
             argv = argv.map(String);
             var a1 = String(argv[0]);
             if (~a1.indexOf('#')) {
@@ -754,20 +903,21 @@ MEGASDK.Terminal = function (client) {
                         };
                         var transfersListener = MEGASDK.getMegaListener('Transfer', {
                             onTransferData: function(api, transfer, data, size) {
-                                console.error('** check this **', arguments);
-                            },
-                            onTransferUpdate: function(api, transfer, data, size) {
-                                console.debug('onTransferUpdate', arguments, data);
-
-                                pending++;
-                                download
-                                    .write(data)
-                                    .then(function() {
-                                        pending--;
-                                    }, function(ex) {
-                                        pending = -1;
-                                        assert(false, 'Write Error', ex);
-                                    });
+                                console.debug('onTransferData', arguments, data);
+                                if (!(data instanceof Uint8Array)) {
+                                    console.error('** check this **', arguments);
+                                }
+                                else {
+                                    pending++;
+                                    download
+                                        .write(data)
+                                        .then(function() {
+                                            pending--;
+                                        }, function(ex) {
+                                            pending = -1;
+                                            assert(false, 'Write Error: ' + ex);
+                                        });
+                                }
                             },
                             onTransferFinish: function(api, transfer, error) {
                                 var ec = error.getErrorCode();
@@ -824,7 +974,7 @@ MEGASDK.Terminal = function (client) {
                         download
                             .open(name, '', size)
                             .then(function() {
-                                term.echo('[[;#11bc78;]' + termEscape(name + ': Incoming file transfer starting.') + ']');
+                                term.echo('[[;#11bc78;]' + termEscape(name + ': Incoming file transfer starting (streaming mode)') + ']');
                                 nextChunk();
                                 listener.abort(null, MEGASDK.MegaError.API_OK);
                             }, startError);
@@ -1112,7 +1262,8 @@ MEGASDK.Terminal = function (client) {
                         // "lcd [localpath]",
                         // "import exportedfilelink#key",
                         // "put localpattern [dstremotepath|dstemail:]",
-                        // "putq [cancelslot]",
+                        "put [dstremotepath|dstemail:]",
+                        "putq [cancelslot]",
                         // "get remotepath [offset [length]]",
                         // "get exportedfilelink#key [offset [length]]",
                         "get exportedfilelink#key",

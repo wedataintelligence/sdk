@@ -145,6 +145,9 @@ void Transfer::complete()
         Node* n;
         bool fixfingerprint = false;
 
+#ifdef EMSCRIPTEN
+# warning FIXME -- verify integrity of file
+#else
         if (!transient_error && fa->fopen(&localfilename, true, false))
         {
             fingerprint.genfingerprint(fa);
@@ -173,6 +176,7 @@ void Transfer::complete()
                 LOG_debug << "Unable to validate fingerprint " << transient_error;
             }
         }
+#endif
 #endif
         delete fa;
 

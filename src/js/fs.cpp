@@ -26,6 +26,26 @@
 #include "mega.h"
 #include <sys/utsname.h>
 #include <sys/ioctl.h>
+#include <emscripten.h>
+
+extern "C" {
+    extern void EMSCRIPTEN_KEEPALIVE onAsyncFinished(void* ctx, int failed, int retry, int finished, void *data)
+    {
+        mega::PosixAsyncIOContext* context = (mega::PosixAsyncIOContext*) ctx;
+
+        context->retry = retry;
+        context->failed = failed;
+        context->finished = finished;
+        if (finished && data)
+        {
+            memcpy(context->buffer, data, context->len);
+        }
+        if (context->userCallback)
+        {
+            context->userCallback(context->userData);
+        }
+    }
+}
 
 namespace mega {
 
@@ -48,6 +68,7 @@ PosixAsyncIOContext::~PosixAsyncIOContext()
 
 PosixFileAccess::PosixFileAccess(Waiter *w) : FileAccess(w)
 {
+    LOG_info << "PosixFileAccess::PosixFileAccess";
     fd = -1;
 
 #ifndef HAVE_FDOPENDIR
@@ -59,33 +80,48 @@ PosixFileAccess::PosixFileAccess(Waiter *w) : FileAccess(w)
 
 PosixFileAccess::~PosixFileAccess()
 {
+    LOG_info << "PosixFileAccess::~PosixFileAccess";
 #ifndef HAVE_FDOPENDIR
     if (dp)
     {
         closedir(dp);
     }
 #endif
-
+#ifndef EMSCRIPTEN
     if (fd >= 0)
     {
         close(fd);
     }
+#endif
 }
 
 bool PosixFileAccess::sysstat(m_time_t* mtime, m_off_t* size)
 {
-    struct stat statbuf;
+    int isvalid;
+    const char *filename = localname.c_str();
+
+    LOG_info << "PosixFileAccess::sysstat --> " << filename;
+
     retry = false;
 
-    if (!stat(localname.c_str(), &statbuf))
-    {
-        if (S_ISDIR(statbuf.st_mode))
-        {
-            return false;
-        }
+    isvalid = EM_ASM_INT({
+        var v = StringView($0);
+        return !!FileAccess._stat(v, 1);
+    }, filename);
 
-        *size = statbuf.st_size;
-        *mtime = statbuf.st_mtime;
+    if (isvalid)
+    {
+        *size = EM_ASM_INT({
+            var v = StringView($0);
+            return FileAccess._stat(v).size | 0;
+        }, filename);
+
+        *mtime = EM_ASM_INT({
+            var v = StringView($0);
+            var r = FileAccess._stat(v).mtime | 0;
+            v.free();
+            return r;
+        }, filename);
 
         FileSystemAccess::captimestamp(mtime);
 
@@ -97,17 +133,21 @@ bool PosixFileAccess::sysstat(m_time_t* mtime, m_off_t* size)
 
 bool PosixFileAccess::sysopen()
 {
-    return (fd = open(localname.c_str(), O_RDONLY)) >= 0;
+    LOG_warn << "sysopen";
+    return false;
 }
 
 void PosixFileAccess::sysclose()
 {
+    LOG_warn << "sysclose";
+#ifndef EMSCRIPTEN
     if (localname.size())
     {
         // fd will always be valid at this point
         close(fd);
         fd = -1;
     }
+#endif
 }
 
 pthread_mutex_t PosixFileAccess::asyncmutex = PTHREAD_MUTEX_INITIALIZER;
@@ -124,6 +164,7 @@ AsyncIOContext *PosixFileAccess::newasynccontext()
 
 void PosixFileAccess::asyncopfinished(union sigval sigev_value)
 {
+    LOG_warn << "PosixFileAccess::asyncopfinished";
     PosixAsyncSynchronizer *synchronizer = (PosixAsyncSynchronizer *)(sigev_value.sival_ptr);
 
     pthread_mutex_lock(&PosixFileAccess::asyncmutex);
@@ -172,16 +213,16 @@ void PosixFileAccess::asyncopfinished(union sigval sigev_value)
 
 void PosixFileAccess::asyncsysopen(AsyncIOContext *context)
 {
-    string path;
-    path.assign((char *)context->buffer, context->len);
-    context->failed = !fopen(&path, context->access & AsyncIOContext::ACCESS_READ,
-                             context->access & AsyncIOContext::ACCESS_WRITE);
-    context->retry = retry;
-    context->finished = true;
-    if (context->userCallback)
+    if (context->access & AsyncIOContext::ACCESS_READ)
     {
-        context->userCallback(context->userData);
+        string path;
+        path.assign((char *)context->buffer, context->len);
+        fopen(&path, true, false); // set size & mtime
     }
+
+    EM_ASM_({
+        FileAccess.open($0, $1);
+    }, context, onAsyncFinished);
 }
 
 void PosixFileAccess::asyncsysread(AsyncIOContext *context)
@@ -191,6 +232,13 @@ void PosixFileAccess::asyncsysread(AsyncIOContext *context)
         return;
     }
 
+    LOG_info << "asyncsysread";
+
+    EM_ASM_({
+        FileAccess.read($0, $1);
+    }, context, onAsyncFinished);
+
+#if 0
     PosixAsyncIOContext *posixContext = dynamic_cast<PosixAsyncIOContext*>(context);
     if (!posixContext)
     {
@@ -236,6 +284,7 @@ void PosixFileAccess::asyncsysread(AsyncIOContext *context)
             posixContext->userCallback(posixContext->userData);
         }
     }
+#endif
 }
 
 void PosixFileAccess::asyncsyswrite(AsyncIOContext *context)
@@ -245,6 +294,11 @@ void PosixFileAccess::asyncsyswrite(AsyncIOContext *context)
         return;
     }
 
+    EM_ASM_({
+        FileAccess.write($0, $1);
+    }, context, onAsyncFinished);
+
+#if 0
     PosixAsyncIOContext *posixContext = dynamic_cast<PosixAsyncIOContext*>(context);
     if (!posixContext)
     {
@@ -290,6 +344,7 @@ void PosixFileAccess::asyncsyswrite(AsyncIOContext *context)
             posixContext->userCallback(posixContext->userData);
         }
     }
+#endif
 }
 
 // update local name
@@ -303,73 +358,35 @@ void PosixFileAccess::updatelocalname(string* name)
 
 bool PosixFileAccess::sysread(byte*, unsigned, m_off_t)
 {
+    LOG_warn << "sysread";
     // Not required for Javascript
     return false;
 }
 
 bool PosixFileAccess::fwrite(const byte*, unsigned, m_off_t)
 {
+    LOG_warn << "fwrite";
     // Not required for Javascript
     return false;
 }
 
 bool PosixFileAccess::fopen(string* f, bool read, bool write)
 {
-    struct stat statbuf;
-
     retry = false;
 
-#ifndef HAVE_FDOPENDIR
+    LOG_verbose << "fopen -- " << f->c_str() << " " << read << write;
+
     if (!write)
     {
-        // workaround for the very unfortunate platforms that do not implement fdopendir() (MacOS...)
-        // (FIXME: can this be done without intruducing a race condition?)
-        if ((dp = opendir(f->c_str())))
-        {
-            // stat & check if the directory is still a directory...
-            if (stat(f->c_str(), &statbuf) || !S_ISDIR(statbuf.st_mode)) return false;
+        #warning folder upload
+        type = /*S_ISDIR(statbuf.st_mode) ? FOLDERNODE :*/ FILENODE;
+        // fsid = (handle)statbuf.st_ino;
+        // fsidvalid = true;
 
-            size = 0;
-            mtime = statbuf.st_mtime;
-            type = FOLDERNODE;
-            fsid = (handle)statbuf.st_ino;
-            fsidvalid = true;
+        localname.resize(1);
+        updatelocalname(f);
 
-            FileSystemAccess::captimestamp(&mtime);
-
-            return true;
-        }
-
-        if (errno != ENOTDIR) return false;
-    }
-#endif
-
-    if ((fd = open(f->c_str(), write ? (read ? O_RDWR : O_WRONLY | O_CREAT | O_TRUNC) : O_RDONLY, 0600)) >= 0)
-    {
-        if (!fstat(fd, &statbuf))
-        {
-            #ifdef __MACH__
-                //If creation time equal to kMagicBusyCreationDate
-                if(statbuf.st_birthtimespec.tv_sec == -2082844800)
-                {
-                    LOG_debug << "File is busy: " << f->c_str();
-                    retry = true;
-                    return false;
-                }
-            #endif
-
-            size = statbuf.st_size;
-            mtime = statbuf.st_mtime;
-            type = S_ISDIR(statbuf.st_mode) ? FOLDERNODE : FILENODE;
-            fsid = (handle)statbuf.st_ino;
-            fsidvalid = true;
-
-            FileSystemAccess::captimestamp(&mtime);
-
-            return true;
-        }
-
-        close(fd);
+        return sysstat(&mtime, &size);
     }
 
     return false;
@@ -387,91 +404,18 @@ PosixFileSystemAccess::PosixFileSystemAccess(int fseventsfd)
 
     localseparator = "/";
 
-#ifdef USE_INOTIFY
-    lastcookie = 0;
-    lastlocalnode = NULL;
-    if ((notifyfd = inotify_init1(IN_NONBLOCK)) >= 0)
-    {
-        notifyfailed = false;
-    }
-#endif
-
-#ifdef __MACH__
-#if __LP64__
-    typedef struct fsevent_clone_args {
-       int8_t *event_list;
-       int32_t num_events;
-       int32_t event_queue_depth;
-       int32_t *fd;
-    } fsevent_clone_args;
-#else
-    typedef struct fsevent_clone_args {
-       int8_t *event_list;
-       int32_t pad1;
-       int32_t num_events;
-       int32_t event_queue_depth;
-       int32_t *fd;
-       int32_t pad2;
-    } fsevent_clone_args;
-#endif
-
-#define FSE_IGNORE 0
-#define FSE_REPORT 1
-#define FSEVENTS_CLONE _IOW('s', 1, fsevent_clone_args)
-#define FSEVENTS_WANT_EXTENDED_INFO _IO('s', 102)
-
-    int fd;
-    fsevent_clone_args fca;
-    int8_t event_list[] = { // action to take for each event
-                              FSE_REPORT,  // FSE_CREATE_FILE,
-                              FSE_REPORT,  // FSE_DELETE,
-                              FSE_REPORT,  // FSE_STAT_CHANGED,
-                              FSE_REPORT,  // FSE_RENAME,
-                              FSE_REPORT,  // FSE_CONTENT_MODIFIED,
-                              FSE_REPORT,  // FSE_EXCHANGE,
-                              FSE_IGNORE,  // FSE_FINDER_INFO_CHANGED,
-                              FSE_REPORT,  // FSE_CREATE_DIR,
-                              FSE_REPORT,  // FSE_CHOWN,
-                              FSE_IGNORE,  // FSE_XATTR_MODIFIED,
-                              FSE_IGNORE,  // FSE_XATTR_REMOVED,
-                          };
-
-    // for this to succeed, geteuid() must be 0, or an existing /dev/fsevents fd must have
-    // been passed to the constructor
-    if ((fd = fseventsfd) >= 0 || (fd = open("/dev/fsevents", O_RDONLY)) >= 0)
-    {
-        fca.event_list = (int8_t*)event_list;
-        fca.num_events = sizeof event_list/sizeof(int8_t);
-        fca.event_queue_depth = 4096;
-        fca.fd = &notifyfd;
-
-        if (ioctl(fd, FSEVENTS_CLONE, (char*)&fca) >= 0)
-        {
-            close(fd);
-
-            if (ioctl(notifyfd, FSEVENTS_WANT_EXTENDED_INFO, NULL) >= 0)
-            {
-                notifyfailed = false;
-            }
-            else
-            {
-                close(notifyfd);
-            }
-        }
-        else
-        {
-            close(fd);
-        }
-    }
-#endif
+    LOG_info << "PosixFileSystemAccess::PosixFileSystemAccess";
 }
 
 PosixFileSystemAccess::~PosixFileSystemAccess()
 {
+    LOG_info << "PosixFileSystemAccess::~PosixFileSystemAccess";
+#ifndef EMSCRIPTEN
     if (notifyfd >= 0)
     {
         close(notifyfd);
     }
+#endif
 }
 
 // wake up from filesystem updates
@@ -493,288 +437,19 @@ void PosixFileSystemAccess::addevents(Waiter* w, int flags)
 // read all pending inotify events and queue them for processing
 int PosixFileSystemAccess::checkevents(Waiter* w)
 {
-    int r = 0;
-#ifdef ENABLE_SYNC
-#ifdef USE_INOTIFY
-    PosixWaiter* pw = (PosixWaiter*)w;
-    string *ignore;
-
-    if (FD_ISSET(notifyfd, &pw->rfds))
-    {
-        char buf[sizeof(struct inotify_event) + NAME_MAX + 1];
-        int p, l;
-        inotify_event* in;
-        wdlocalnode_map::iterator it;
-        string localpath;
-
-        while ((l = read(notifyfd, buf, sizeof buf)) > 0)
-        {
-            for (p = 0; p < l; p += offsetof(inotify_event, name) + in->len)
-            {
-                in = (inotify_event*)(buf + p);
-
-                if (in->mask & (IN_Q_OVERFLOW | IN_UNMOUNT))
-                {
-                    notifyerr = true;
-                }
-
-// this flag was introduced in glibc 2.13 and Linux 2.6.36 (released October 20, 2010)
-#ifndef IN_EXCL_UNLINK
-#define IN_EXCL_UNLINK 0x04000000
-#endif
-                if (in->mask & (IN_CREATE | IN_DELETE | IN_MOVED_FROM
-                              | IN_MOVED_TO | IN_CLOSE_WRITE | IN_EXCL_UNLINK))
-                {
-                    if ((in->mask & (IN_CREATE | IN_ISDIR)) != IN_CREATE)
-                    {
-                        it = wdnodes.find(in->wd);
-
-                        if (it != wdnodes.end())
-                        {
-                            if (lastcookie && lastcookie != in->cookie)
-                            {
-                                ignore = &lastlocalnode->sync->dirnotify->ignore;
-                                if (lastname.size() < ignore->size()
-                                 || memcmp(lastname.c_str(), ignore->data(), ignore->size())
-                                 || (lastname.size() > ignore->size()
-                                  && memcmp(lastname.c_str() + ignore->size(), localseparator.c_str(), localseparator.size())))
-                                {
-                                    // previous IN_MOVED_FROM is not followed by the
-                                    // corresponding IN_MOVED_TO, so was actually a deletion
-                                    lastlocalnode->sync->dirnotify->notify(DirNotify::DIREVENTS,
-                                                                           lastlocalnode,
-                                                                           lastname.c_str(),
-                                                                           lastname.size());
-
-                                    r |= Waiter::NEEDEXEC;
-                                }
-                            }
-
-                            if (in->mask & IN_MOVED_FROM)
-                            {
-                                // could be followed by the corresponding IN_MOVE_TO or not..
-                                // retain in case it's not (in which case it's a deletion)
-                                lastcookie = in->cookie;
-                                lastlocalnode = it->second;
-                                lastname = in->name;
-                            }
-                            else
-                            {
-                                lastcookie = 0;
-
-                                ignore = &it->second->sync->dirnotify->ignore;
-                                unsigned int insize = strlen(in->name);
-
-                                if (insize < ignore->size()
-                                 || memcmp(in->name, ignore->data(), ignore->size())
-                                 || (insize > ignore->size()
-                                  && memcmp(in->name + ignore->size(), localseparator.c_str(), localseparator.size())))
-                                {
-                                    it->second->sync->dirnotify->notify(DirNotify::DIREVENTS,
-                                                                        it->second, in->name,
-                                                                        insize);
-
-                                    r |= Waiter::NEEDEXEC;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // this assumes that corresponding IN_MOVED_FROM / IN_MOVED_FROM pairs are never notified separately
-        if (lastcookie)
-        {
-            ignore = &lastlocalnode->sync->dirnotify->ignore;
-
-            if (lastname.size() < ignore->size()
-             || memcmp(lastname.c_str(), ignore->data(), ignore->size())
-             || (lastname.size() > ignore->size()
-              && memcmp(lastname.c_str() + ignore->size(), localseparator.c_str(), localseparator.size())))
-            {
-                lastlocalnode->sync->dirnotify->notify(DirNotify::DIREVENTS,
-                                                       lastlocalnode,
-                                                       lastname.c_str(),
-                                                       lastname.size());
-
-                r |= Waiter::NEEDEXEC;
-            }
-
-            lastcookie = 0;
-        }
-    }
-#endif
-
-#ifdef __MACH__
-#define FSE_MAX_ARGS 12
-#define FSE_MAX_EVENTS 11
-#define FSE_ARG_DONE 0xb33f
-#define FSE_EVENTS_DROPPED 999
-#define FSE_TYPE_MASK 0xfff
-#define FSE_ARG_STRING 2
-#define FSE_RENAME 3
-#define FSE_GET_FLAGS(type) (((type) >> 12) & 15)
-
-    struct kfs_event_arg {
-        u_int16_t type;         // argument type
-        u_int16_t len;          // size of argument data that follows this field
-        union {
-            struct vnode *vp;
-            char *str;
-            void *ptr;
-            int32_t int32;
-            dev_t dev;
-            ino_t ino;
-            int32_t mode;
-            uid_t uid;
-            gid_t gid;
-            uint64_t timestamp;
-        } data;
-    };
-
-    struct kfs_event {
-        int32_t type; // event type
-        pid_t pid;  // pid of the process that performed the operation
-        kfs_event_arg args[FSE_MAX_ARGS]; // event arguments
-    };
-
-    // MacOS /dev/fsevents delivers all filesystem events as a unified stream,
-    // which we filter
-    int pos, avail;
-    int off;
-    int i, n, s;
-    kfs_event* kfse;
-    kfs_event_arg* kea;
-    char buffer[131072];
-    char* paths[2];
-    char* path;
-    Sync* pathsync[2];
-    sync_list::iterator it;
-    fd_set rfds;
-    timeval tv = { 0 };
-    static char rsrc[] = "/..namedfork/rsrc";
-    static unsigned int rsrcsize = sizeof(rsrc) - 1;
-
-    if (notifyfd < 0)
-    {
-        return r;
-    }
-
-    for (;;)
-    {
-        FD_ZERO(&rfds);
-        FD_SET(notifyfd, &rfds);
-
-        // ensure nonblocking behaviour
-        if (select(notifyfd + 1, &rfds, NULL, NULL, &tv) <= 0) break;
-
-        if ((avail = read(notifyfd, buffer, sizeof buffer)) < 0)
-        {
-            notifyerr = true;
-            break;
-        }
-
-        for (pos = 0; pos < avail; )
-        {
-            kfse = (kfs_event*)(buffer + pos);
-
-            pos += sizeof(int32_t) + sizeof(pid_t);
-
-            if (kfse->type == FSE_EVENTS_DROPPED)
-            {
-                // force a full rescan
-                notifyerr = true;
-                pos += sizeof(u_int16_t);
-                continue;
-            }
-
-            n = 0;
-
-            for (kea = kfse->args; pos < avail; kea = (kfs_event_arg*)((char*)kea + off))
-            {
-                // no more arguments
-                if (kea->type == FSE_ARG_DONE)
-                {
-                    pos += sizeof(u_int16_t);
-                    break;
-                }
-
-                off = sizeof(kea->type) + sizeof(kea->len) + kea->len;
-                pos += off;
-
-                if (kea->type == FSE_ARG_STRING && n < 2)
-                {
-                    paths[n++] = ((char*)&(kea->data.str))-4;
-                }
-            }
-
-            // always skip paths that are outside synced fs trees or in a sync-local rubbish folder
-            for (i = n; i--; )
-            {
-                path = paths[i];
-                unsigned int psize = strlen(path);
-
-                for (it = client->syncs.begin(); it != client->syncs.end(); it++)
-                {
-                    int rsize = (*it)->localroot.localname.size();
-                    int isize = (*it)->dirnotify->ignore.size();
-
-                    if (psize >= rsize
-                      && !memcmp((*it)->localroot.localname.c_str(), path, rsize)    // prefix match
-                      && (!path[rsize] || path[rsize] == '/')               // at end: end of path or path separator
-                      && (psize <= (rsize + isize)                          // not ignored
-                          || (path[rsize + isize + 1] && path[rsize + isize + 1] != '/')
-                          || memcmp(path + rsize + 1, (*it)->dirnotify->ignore.c_str(), isize))
-                      && (psize < rsrcsize                                  // it isn't a resource fork
-                          || memcmp(path + psize - rsrcsize, rsrc, rsrcsize)))
-                        {
-                            paths[i] += (*it)->localroot.localname.size() + 1;
-                            pathsync[i] = *it;
-                            break;
-                        }
-                }
-
-                if (it == client->syncs.end())
-                {
-                    paths[i] = NULL;
-                }
-            }
-
-            // for rename/move operations, skip source if both paths are synced
-            // (to handle rapid a -> b, b -> c without overwriting b).
-            if (n == 2 && paths[0] && paths[1] && (kfse->type & FSE_TYPE_MASK) == FSE_RENAME)
-            {
-                paths[0] = NULL;
-            }
-
-            for (i = n; i--; )
-            {
-                if (paths[i])
-                {
-                    pathsync[i]->dirnotify->notify(DirNotify::DIREVENTS,
-                                                   &pathsync[i]->localroot,
-                                                   paths[i],
-                                                   strlen(paths[i]));
-
-                    r |= Waiter::NEEDEXEC;
-                }
-            }
-        }
-    }
-#endif
-#endif
-    return r;
+    return 0;
 }
 
 // generate unique local filename in the same fs as relatedpath
 void PosixFileSystemAccess::tmpnamelocal(string* localname) const
 {
     static unsigned tmpindex;
-    char buf[128];
+    char buf[32];
 
-    sprintf(buf, ".getxfer.%lu.%u.mega", (unsigned long)getpid(), tmpindex++);
+    sprintf(buf, ".getxfer.%04x.mega", tmpindex++);
     *localname = buf;
+
+    LOG_verbose << "PosixFileSystemAccess::tmpnamelocal -- " << buf;
 }
 
 void PosixFileSystemAccess::path2local(string* local, string* path) const
@@ -796,73 +471,18 @@ bool PosixFileSystemAccess::getsname(string*, string*) const
 
 bool PosixFileSystemAccess::renamelocal(string* oldname, string* newname, bool)
 {
-    if (!rename(oldname->c_str(), newname->c_str()))
-    {
-        return true;
-    }
+    // XXX: this should be async
 
-    target_exists = errno == EEXIST;
-    transient_error = errno == ETXTBSY || errno == EBUSY;
-
-    int e = errno;
-    LOG_warn << "Unable to move file: " << oldname->c_str() << " to " << newname->c_str() << ". Error code: " << e;
-
-    return false;
+    EM_ASM_({
+        FileAccess.save($0, $1);
+    }, oldname->c_str(), newname->c_str());
+    return true;
 }
 
 bool PosixFileSystemAccess::copylocal(string* oldname, string* newname, m_time_t mtime)
 {
-    int sfd, tfd;
-    ssize_t t = -1;
-
-#ifdef HAVE_SENDFILE
-    // Linux-specific - kernel 2.6.33+ required
-    if ((sfd = open(oldname->c_str(), O_RDONLY | O_DIRECT)) >= 0)
-    {
-        LOG_verbose << "Copying via sendfile";
-        if ((tfd = open(newname->c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_DIRECT, 0600)) >= 0)
-        {
-            while ((t = sendfile(tfd, sfd, NULL, 1024 * 1024 * 1024)) > 0);
-#else
-    char buf[16384];
-
-    if ((sfd = open(oldname->c_str(), O_RDONLY)) >= 0)
-    {
-        LOG_verbose << "Copying via read/write";
-        if ((tfd = open(newname->c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0600)) >= 0)
-        {
-            while (((t = read(sfd, buf, sizeof buf)) > 0) && write(tfd, buf, t) == t);
-#endif
-            close(tfd);
-        }
-        else
-        {
-            target_exists = errno == EEXIST;
-            transient_error = errno == ETXTBSY || errno == EBUSY;
-
-            int e = errno;
-            LOG_warn << "Unable to copy file. Error code: " << e;
-        }
-
-        close(sfd);
-    }
-
-    if (!t)
-    {
-#ifdef ENABLE_SYNC
-        t = !setmtimelocal(newname, mtime);
-#else
-        // fails in setmtimelocal are allowed in non sync clients.
-        setmtimelocal(newname, mtime);
-#endif
-    }
-    else
-    {
-        int e = errno;
-        LOG_debug << "Unable to copy file: " << oldname->c_str() << " to " << newname->c_str() << ". Error code: " << e;
-    }
-
-    return !t;
+    LOG_debug << "Dummy copylocal: " << oldname->c_str() << " to " << newname->c_str();
+    return false;
 }
 
 // FIXME: add platform support for recycle bins
@@ -873,109 +493,57 @@ bool PosixFileSystemAccess::rubbishlocal(string* name)
 
 bool PosixFileSystemAccess::unlinklocal(string* name)
 {
-    if (!unlink(name->c_str())) return true;
+    // XXX: this should be async
 
-    transient_error = errno == ETXTBSY || errno == EBUSY;
+    int r = EM_ASM_INT({
+        return FileAccess.unlink($0);
+    }, name->c_str());
 
-    return false;
+    return !!r;
 }
 
 // delete all files, folders and symlinks contained in the specified folder
 // (does not recurse into mounted devices)
 void PosixFileSystemAccess::emptydirlocal(string* name, dev_t basedev)
 {
-    DIR* dp;
-    dirent* d;
-    int removed;
-    struct stat statbuf;
-    int t;
-
-    if (!basedev)
-    {
-        if (lstat(name->c_str(), &statbuf) || !S_ISDIR(statbuf.st_mode) || S_ISLNK(statbuf.st_mode)) return;
-        basedev = statbuf.st_dev;
-    }
-
-    if ((dp = opendir(name->c_str())))
-    {
-        for (;;)
-        {
-            removed = 0;
-
-            while ((d = readdir(dp)))
-            {
-                if (d->d_type != DT_DIR
-                 || *d->d_name != '.'
-                 || (d->d_name[1] && (d->d_name[1] != '.' || d->d_name[2])))
-                {
-                    t = name->size();
-                    name->append("/");
-                    name->append(d->d_name);
-
-                    if (!lstat(name->c_str(), &statbuf))
-                    {
-                        if (!S_ISLNK(statbuf.st_mode) && S_ISDIR(statbuf.st_mode) && statbuf.st_dev == basedev)
-                        {
-                            emptydirlocal(name, basedev);
-                            removed |= !rmdir(name->c_str());
-                        }
-                        else
-                        {
-                            removed |= !unlink(name->c_str());
-                        }
-                    }
-
-                    name->resize(t);
-                }
-            }
-
-            if (!removed)
-            {
-                break;
-            }
-
-            rewinddir(dp);
-        }
-
-        closedir(dp);
-    }
+    LOG_debug << "Dummy emptydirlocal: " << name->c_str() << " " << basedev;
 }
 
 bool PosixFileSystemAccess::rmdirlocal(string* name)
 {
+#ifndef EMSCRIPTEN
     emptydirlocal(name);
 
     if (!rmdir(name->c_str())) return true;
 
     transient_error = errno == ETXTBSY || errno == EBUSY;
-
+#endif
     return false;
 }
 
 bool PosixFileSystemAccess::mkdirlocal(string* name, bool)
 {
-    bool r = !mkdir(name->c_str(), 0700);
+    bool r = false;
 
-    if (!r)
+#ifndef EMSCRIPTEN
+    if (!(r = !mkdir(name->c_str(), 0700)))
     {
         target_exists = errno == EEXIST;
         transient_error = errno == ETXTBSY || errno == EBUSY;
     }
-
+#endif
     return r;
 }
 
 bool PosixFileSystemAccess::setmtimelocal(string* name, m_time_t mtime)
 {
-    struct utimbuf times = { (time_t)mtime, (time_t)mtime };
+    unsigned time = mtime & 0xffffffff;
 
-    bool success = !utime(name->c_str(), &times);
-    if (!success)
-    {
-        transient_error = errno == ETXTBSY || errno == EBUSY;
-    }
+    int success = EM_ASM_INT({
+        return FileAccess.utime($0, $1);
+    }, name->c_str(), time);
 
-    return success;
+    return !!success;
 }
 
 bool PosixFileSystemAccess::chdirlocal(string* name) const
@@ -1123,6 +691,7 @@ DirNotify* PosixFileSystemAccess::newdirnotify(string* localpath, string* ignore
 
 bool PosixDirAccess::dopen(string* path, FileAccess* f, bool doglob)
 {
+#ifndef EMSCRIPTEN
     if (doglob)
     {
         if (glob(path->c_str(), GLOB_NOSORT, NULL, &globbuf))
@@ -1150,12 +719,13 @@ bool PosixDirAccess::dopen(string* path, FileAccess* f, bool doglob)
     {
         dp = opendir(path->c_str());
     }
-
+#endif
     return dp != NULL;
 }
 
 bool PosixDirAccess::dnext(string* path, string* name, bool followsymlinks, nodetype_t* type)
 {
+#ifndef EMSCRIPTEN
     if (globbing)
     {
         struct stat statbuf;
@@ -1210,7 +780,7 @@ bool PosixDirAccess::dnext(string* path, string* name, bool followsymlinks, node
     }
 
     path->resize(pathsize);
-
+#endif
     return false;
 }
 
@@ -1224,6 +794,7 @@ PosixDirAccess::PosixDirAccess()
 
 PosixDirAccess::~PosixDirAccess()
 {
+#ifndef EMSCRIPTEN
     if (dp)
     {
         closedir(dp);
@@ -1233,5 +804,6 @@ PosixDirAccess::~PosixDirAccess()
     {
         globfree(&globbuf);
     }
+#endif
 }
 } // namespace

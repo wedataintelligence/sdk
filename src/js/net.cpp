@@ -23,9 +23,9 @@
 #include <emscripten.h>
 
 extern "C" {
-    extern int jsnet_post(const char*, const char*);
+    extern int jsnet_post(const char*, const char*, unsigned);
 
-    extern void EMSCRIPTEN_KEEPALIVE jsnet_onloadend(void* ctx, int status, const char* data, int datalen)
+    extern void EMSCRIPTEN_KEEPALIVE jsnet_onloadend(void* ctx, int status, void* data, int datalen)
     {
         mega::JSHttpContext* httpctx = (mega::JSHttpContext*) ctx;
         mega::JSHttpIO* httpio = (mega::JSHttpIO*)httpctx->httpio;
@@ -98,7 +98,7 @@ void JSHttpIO::addevents(Waiter* cwaiter, int flags)
 }
 
 // XHR onloadend handler
-void JSHttpIO::onloadend(void* handle, int status, const char *data, int datalen)
+void JSHttpIO::onloadend(void* handle, int status, void *data, int datalen)
 {
     JSHttpContext* httpctx = (JSHttpContext*) handle;
     JSHttpIO* httpio = (JSHttpIO*)httpctx->httpio;
@@ -119,14 +119,7 @@ void JSHttpIO::onloadend(void* handle, int status, const char *data, int datalen
     {
         httpio->lastdata = Waiter::ds;
 
-        if (datalen) {
-            if (req->buf) {
-                memcpy(req->buf, data, datalen);
-            }
-            else {
-                req->in.assign(data, datalen);
-            }
-        }
+        req->put(data, datalen, true);
     }
 
     if (req->binary)
@@ -160,16 +153,22 @@ void JSHttpIO::post(HttpReq* req, const char* data, unsigned len)
 
     LOG_debug << "POST target URL: " << req->posturl << " chunked: " << req->chunked;
 
+    if (!data)
+    {
+        len = req->out->size();
+        data = req->out->data();
+    }
+
     if (req->binary)
     {
-        LOG_debug << "[sending " << (data ? len : req->out->size()) << " bytes of raw data]";
+        LOG_debug << "[sending " << len << " bytes of raw data]";
     }
     else
     {
         LOG_debug << "Sending: " << *req->out;
     }
 
-    ctx = jsnet_post(req->posturl.c_str(), data ? data : req->out->data());
+    ctx = jsnet_post(req->posturl.c_str(), data, len);
     if (ctx < 0)
     {
         LOG_err << "Request failed";
@@ -184,6 +183,7 @@ void JSHttpIO::post(HttpReq* req, const char* data, unsigned len)
         httpctx->httpio = this;
         httpctx->req = req;
         httpctx->ctxid = ctx;
+        httpctx->postlen = len;
 
         req->httpiohandle = (void*)httpctx;
 

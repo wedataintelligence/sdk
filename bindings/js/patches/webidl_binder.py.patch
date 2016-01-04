@@ -1,5 +1,5 @@
 --- webidl_binder.py.orig	Sun Nov 15 20:06:49 2015
-+++ webidl_binder.py	Tue Dec 15 14:04:13 2015
++++ webidl_binder.py	Sat Dec 19 20:14:01 2015
 @@ -15,2 +15,4 @@
  import WebIDL
 +import tempfile
@@ -16,7 +16,7 @@
 +  Object.defineProperty(Module, k, { value: v });
 +}
 +function freeze(o) {
-+  Object.freeze(o);
++  return Object.freeze(o);
 +}
 +''']
 +

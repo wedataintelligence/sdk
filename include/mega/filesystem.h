@@ -34,6 +34,7 @@ struct MEGA_API FsNodeId
 
 typedef void (*asyncfscallback)(void *);
 
+struct MEGA_API FileAccess;
 struct MEGA_API AsyncIOContext
 {
     enum {
@@ -64,6 +65,7 @@ struct MEGA_API AsyncIOContext
     unsigned pad;
     byte *buffer;
     Waiter *waiter;
+    FileAccess *fa;
 };
 
 // generic host file/directory access interface
@@ -124,7 +126,7 @@ struct MEGA_API FileAccess
 
     virtual bool asyncavailable() { return false; }
 
-    AsyncIOContext *asyncfopen(string *, bool, bool, m_off_t = 0);
+    AsyncIOContext *asyncfopen(string *, bool, bool, TransferSlot* = NULL);
     virtual void asyncsysopen(AsyncIOContext*);
 
     AsyncIOContext* asyncfread(string *, unsigned, unsigned, m_off_t);
@@ -253,7 +255,7 @@ struct MEGA_API FileSystemAccess : public EventTrigger
 
     // make sure that we stay within the range of timestamps supported by the server data structures (unsigned 32-bit)
     static void captimestamp(m_time_t*);
-    
+
     // set mtime
     virtual bool setmtimelocal(string *, m_time_t) = 0;
 
@@ -277,7 +279,7 @@ struct MEGA_API FileSystemAccess : public EventTrigger
 
     // set whenever an operation fails due to a transient condition (e.g. locking violation)
     bool transient_error;
-    
+
     // set whenever there was a global file notification error or permanent failure
     // (this is in addition to the DirNotify-local error)
     bool notifyerr;

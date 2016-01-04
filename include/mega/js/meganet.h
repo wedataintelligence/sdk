@@ -29,7 +29,7 @@ namespace mega {
 class JSHttpIO: public HttpIO
 {
 public:
-    void onloadend(void*, int, const char*, int);
+    void onloadend(void*, int, void*, int);
     void post(HttpReq*, const char* = 0, unsigned = 0);
     void cancel(HttpReq*);
     void sendchunked(HttpReq*);

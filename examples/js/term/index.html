@@ -6,6 +6,7 @@
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.4/jquery.min.js"></script>
     <script src="https://terminal.jcubic.pl/js/jquery.mousewheel-min.js"></script>
     <script src="https://terminal.jcubic.pl/js/jquery.terminal-min.js"></script>
+    <!--script src="https://terminal.jcubic.pl/js/unix_formatting.js"></script-->
     <link href="https://fonts.googleapis.com/css?family=Droid+Sans+Mono" rel="stylesheet" type="text/css"/>
     <link href="https://terminal.jcubic.pl/css/jquery.terminal.css" rel="stylesheet"/>
     <script src="term.js" defer></script>
@@ -19,6 +20,7 @@
       * {
         color: #adc;
         font-family: "Droid Sans Mono" !important;
+        vertical-align: baseline;
       }
       #femsg {
         display:none;
@@ -40,15 +42,58 @@
         transform: scale(0.6);
         transform-origin: right bottom 0px;
       }
+      #uploader {
+        z-index:31;
+        border-radius: 5px;
+        background: #1e1e4f;
+        border: 2px dashed #0087F7;
+        box-shadow: 0px 0px 5px #bbb;
+        cursor: pointer;
+        width: 480px;
+        height: 240px;
+        position: absolute;
+        top:0;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        margin: auto;
+      }
+      #uploader div {
+        font-weight: 400;
+        text-align: center;
+        margin: 6em 0px;
+        color: aliceblue;
+      }
     </style>
   </head>
   <body>
     <div id="femsg"></div>
     <div id="terminal" class="terminal"><strong>Loading, please wait...</strong></div>
     <a href="" download="filename" id="dllink" style="display:none;"></a>
+    <div id="uploader" style="display:none;"><div>Drop files here or click to upload.</div></div>
+    <input type="file" id="filepicker" style="visibility:hidden" name="filepicker"/>
 
     <script type='text/javascript'>
       var global = this;
+
+      $(window).ready(function() {
+        var filePicker = function(ev) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            if (ev.type[3] === 'g') return;
+            if (ev.type === 'click') {
+                return $('#filepicker').click();
+            }
+            var files = Object(ev.originalEvent.dataTransfer || ev.target).files;
+            $(window).trigger('startUpload', [files && files[0]]);
+            $('#uploader').hide();
+        };
+        $('#uploader').bind('dragover', filePicker);
+        $('#uploader').bind('dragleave', filePicker);
+        $('#uploader').bind('drop', filePicker);
+        $('#uploader').bind('click', filePicker);
+        $('#filepicker').bind('change', filePicker);
+      });
 
       var MEGASDK = {
         // TOTAL_MEMORY: (0x1000000 * 8),
