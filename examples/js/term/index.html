@@ -113,10 +113,21 @@
                 global.XMLHttpRequest = require("xhr2");
             }
             var client = new this.MegaApi('GdcVBRRY', '', 'JSSDK Example');
-            console.debug('onRuntimeInitialized', client);
             window.api = client;
             MEGASDK.Terminal(client);
             MEGASDK.memoryInitializerRequest = null;
+
+            // crc32 test
+            var str = 'Слартибартфаст';
+            if(MEGASDK.StringView(str).crc32 !== 0xCAA07FFA) {
+                alert('crc32 checksum error!');
+            }
+            var ptr = MEGASDK.allocate(MEGASDK.intArrayFromString(str), 'i8', MEGASDK.ALLOC_STACK);
+            if(MEGASDK.StringView(ptr).crc32 !== 0xCAA07FFA) {
+                alert('crc32 checksum error!!');
+            }
+
+            console.debug('onRuntimeInitialized', client, ptr);
         }
       };
       window.onerror = function(event) {

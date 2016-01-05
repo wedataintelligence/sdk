@@ -405,21 +405,13 @@ MegaApi.prototype.startUpload = function(aFile) {
     return this._startUpload.apply(this, args);
 };
 
-function StringView(data) {
+function StringView(data, size) {
     if (!(this instanceof StringView)) {
-        return new StringView(data);
+        return new StringView(data, size);
     }
 
-    if (typeof data === 'number') {
-        this.ptr = data;
-        if (StringView.__cache__[data]) {
-            data = StringView.__cache__[data];
-        }
-        else {
-            data = Pointer_stringify(data);
-            StringView.__cache__[this.ptr] = data;
-        }
-    }
+    define('size', size | 0, this);
+    define('ptr',  typeof data === 'number' ? data : null, this);
 
     if (ArrayBuffer.isView(data)) {
         var offset = data.byteOffset;
@@ -434,9 +426,8 @@ function StringView(data) {
     if (data instanceof ArrayBuffer) {
         this._buffer = data;
     }
-    else {
+    else if (!this.ptr) {
         this._rawData = String(data);
-        this._ownBuffer = true;
     }
 }
 StringView.__cache__ = {};
@@ -444,22 +435,58 @@ StringView.prototype = {
     constructor: StringView,
     get rawData() {
         if (!this._rawData) {
-            var u8 = new Uint8Array(this._buffer);
-            this._rawData = UTF8ArrayToString(u8, 0);
+            if (this.ptr) {
+                if (!StringView.__cache__[this.ptr]) {
+                    StringView.__cache__[this.ptr] = Pointer_stringify(this.ptr);
+                }
+                this._rawData = StringView.__cache__[this.ptr];
+            }
+            else {
+                var u8 = new Uint8Array(this._buffer);
+                this._rawData = UTF8ArrayToString(u8, 0);
+            }
         }
         return this._rawData;
     },
     get buffer() {
         if (!this._buffer) {
-            var str = this._rawData;
-            var len = str.length * 6 + 1;
-            var ab = new ArrayBuffer(len);
-            var u8 = new Uint8Array(ab);
+            if (this.ptr) {
+                var size = this.size > 0
+                    ? this.size
+                    : Pointer_length(this.ptr);
+                this._buffer = getArrayBuffer(this.ptr, size);
+            }
+            else {
+                var str = this._rawData;
+                var len = str.length * 6 + 1;
+                var ab = new ArrayBuffer(len);
+                var u8 = new Uint8Array(ab);
 
-            len = stringToUTF8Array(str, u8, 0, len);
-            this._buffer = ab.slice(0, len);
+                len = stringToUTF8Array(str, u8, 0, len);
+                this._buffer = ab.slice(0, len);
+                this._ownBuffer = true;
+            }
         }
         return this._buffer;
+    },
+    get crc32() {
+        if (!this._crc32) {
+            if (this.ptr) {
+                var size = this.size > 0
+                    ? this.size
+                    : Pointer_length(this.ptr);
+                this._crc32 = _crc32(this.ptr, size);
+            }
+            else {
+                var data = this.buffer;
+                var size = data.byteLength;
+                data = writeArrayBufferToMemory(data, size);
+                this._crc32 = _crc32(data, size);
+                _free(data);
+            }
+            this._crc32 >>>= 0;
+        }
+        return this._crc32;
     },
     toString: function() {
         return this.rawData;
@@ -476,6 +503,7 @@ StringView.prototype = {
         if (this.ptr) {
             delete StringView.__cache__[this.ptr];
         }
+        delete this._crc32;
         delete this._buffer;
         delete this._rawData;
     }

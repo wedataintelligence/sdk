@@ -138,7 +138,7 @@ function dumptree(api, lines, n, recurse, depth)
             case MEGASDK.MegaNode.TYPE_FILE:
                 line.size = MEGASDK.formatBytes(MEGASDK.getUint64(n.getSize()));
                 line.mtime = n.getModificationTime();
-                // line.hash = api.getFingerprint(n);
+                line.hash = crc32s(api.getFingerprint(n));
 
                 // const char* p;
                 // if ((p = strchr(n->fileattrstring.c_str(), ':')))
@@ -257,6 +257,10 @@ function termEscape(str) {
         if (ch === ' ') return '&nbsp;';
         return '&#' + ch.charCodeAt(0) + ';';
     });
+}
+
+function crc32s(str) {
+    return ("0000000" + MEGASDK.StringView(str).crc32.toString(16).toUpperCase()).slice(-8);
 }
 
 var cwd = false;
@@ -1343,4 +1347,4 @@ var BANNER =
 '  /\\__|    |/ __ \\\\   / / __ \\_/        \\  \\___|  | \\|  |  |_> |  |   /        \\|    `   |    |  \\  \n'+
 '  \\________(____  /\\_/ (____  /_______  /\\___  |__|  |__|   __/|__|  /_______  /_______  |____|__ \\ \n'+
 '                \\/          \\/        \\/     \\/         |__|                 \\/        \\/        \\/ \n'+
-'                                                               MEGA SDK version:  %% (46919096)    \n';
+'                                                               MEGA SDK version:  %% (4ba7cc6e)    \n';

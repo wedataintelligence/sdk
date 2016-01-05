@@ -696,3 +696,21 @@ void HMACSHA256::get(byte *out)
 }
 
 } // namespace
+
+
+#ifdef EMSCRIPTEN
+#include <emscripten.h>
+
+extern "C" {
+    uint32_t EMSCRIPTEN_KEEPALIVE crc32(const byte* data, unsigned len)
+    {
+        CryptoPP::CRC32 crc32;
+        uint32_t crcval;
+
+        crc32.Update(data, len);
+        crc32.Final((byte*)&crcval);
+
+        return crcval;
+    }
+}
+#endif

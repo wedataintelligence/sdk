@@ -254,6 +254,17 @@
         return getInt64(value, true);
     }
     define('getUint64', getUint64);
+    function Pointer_length(ptr) {
+        var t, i = 0;
+        ptr |= 0;
+        while (ptr + i < TOTAL_MEMORY) {
+            t = HEAPU8[ptr + i >> 0];
+            if (t == 0) break;
+            i++;
+        }
+        return i;
+    }
+    define('Pointer_length', Pointer_length);
     function writeArrayBufferToMemory(buffer) {
         buffer = new Uint8Array(buffer);
         var data = _malloc(buffer.byteLength);
