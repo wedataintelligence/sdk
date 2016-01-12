@@ -7,13 +7,7 @@ SAVE_LDFLAGS="$LDFLAGS"
 SAVE_CXXFLAGS="$CXXFLAGS"
 SAVE_CPPFLAGS="$CPPFLAGS"
 
-AC_MSG_CHECKING([if building JavaScript bindings])
-AC_ARG_ENABLE(javascript,
-    AS_HELP_STRING([--enable-javascript], [build JavaScript language bindings]),
-    [AC_MSG_RESULT([yes])],
-    [AC_MSG_RESULT([no])
-     enable_javascript=no]
-)
+AS_CASE([$CXX], [*em++], [enable_javascript="yes"], [enable_javascript="no"])
 
 if test "x$enable_javascript" = "xyes" ; then
 
