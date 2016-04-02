@@ -286,6 +286,13 @@ void Sync::changestate(syncstate_t newstate)
     {
         client->app->syncupdate_state(this, newstate);
 
+        if (newstate == SYNC_FAILED && statecachetable)
+        {
+            statecachetable->remove();
+            delete statecachetable;
+            statecachetable = NULL;
+        }
+
         state = newstate;
         fullscan = false;
     }
@@ -1018,7 +1025,7 @@ bool Sync::movetolocaldebris(string* localpath)
         if (i > -3)
         {
             LOG_verbose << "Creating daily local debris folder";
-            havedir = client->fsaccess->mkdirlocal(&localdebris, true) || client->fsaccess->target_exists;
+            havedir = client->fsaccess->mkdirlocal(&localdebris, false) || client->fsaccess->target_exists;
         }
 
         localdebris.append(client->fsaccess->localseparator);

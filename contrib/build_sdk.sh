@@ -39,7 +39,9 @@ no_examples=""
 configure_only=0
 disable_posix_threads=""
 enable_sodium=0
+enable_libuv=0
 android_build=0
+enable_cryptopp=0
 
 on_exit_error() {
     echo "ERROR! Please check log files. Exiting.."
@@ -108,7 +110,14 @@ package_download() {
         rm -f $file || true
     fi
 
-    wget --no-check-certificate -c $url -O $file --progress=bar:force || exit 1
+	# use packages previously downloaded in obs server(linux). if not present, download from URL specified
+	cp /srv/dependencies_manually_downloaded/$3 $file || \
+	wget --no-check-certificate -c $url -O $file --progress=bar:force -t 2 -T 30 || exit 1
+
+    
+    
+    
+    
 }
 
 package_extract() {
@@ -147,11 +156,16 @@ package_configure() {
 
     local conf_f1="./config"
     local conf_f2="./configure"
+    local autogen="./autogen.sh"
 
     echo "Configuring $name"
 
     local cwd=$(pwd)
     cd $dir || exit 1
+
+    if [ -f $autogen ]; then
+        $autogen
+    fi
 
     if [ -f $conf_f1 ]; then
         $conf_f1 --prefix=$install_dir $params &> ../$name.conf.log || exit 1
@@ -226,7 +240,7 @@ openssl_pkg() {
     local build_dir=$1
     local install_dir=$2
     local name="OpenSSL"
-    local openssl_ver="1.0.2e"
+    local openssl_ver="1.0.2g"
     local openssl_url="https://www.openssl.org/source/openssl-$openssl_ver.tar.gz"
     local openssl_file="openssl-$openssl_ver.tar.gz"
     local openssl_dir="openssl-$openssl_ver"
@@ -298,6 +312,8 @@ cryptopp_pkg() {
         local file=$local_dir/$cryptopp_mobile_file
         unzip -o $file -d $cryptopp_dir || exit 1
     fi
+    #modify Makefile so that it does not use specific cpu architecture optimizations
+    sed "s#CXXFLAGS += -march=native#CXXFLAGS += #g" -i $cryptopp_dir/GNUmakefile
     package_build $name $cryptopp_dir static
     package_install $name $cryptopp_dir $install_dir
 }
@@ -306,7 +322,7 @@ sodium_pkg() {
     local build_dir=$1
     local install_dir=$2
     local name="Sodium"
-    local sodium_ver="1.0.4"
+    local sodium_ver="1.0.8"
     local sodium_url="https://download.libsodium.org/libsodium/releases/libsodium-$sodium_ver.tar.gz"
     local sodium_file="sodium-$sodium_ver.tar.gz"
     local sodium_dir="libsodium-$sodium_ver"
@@ -325,6 +341,40 @@ sodium_pkg() {
     package_configure $name $sodium_dir $install_dir "$sodium_params"
     package_build $name $sodium_dir
     package_install $name $sodium_dir $install_dir
+}
+
+libuv_pkg() {
+    local build_dir=$1
+    local install_dir=$2
+    local name="libuv"
+    local libuv_ver="v1.8.0"
+    local libuv_url="http://dist.libuv.org/dist/$libuv_ver/libuv-$libuv_ver.tar.gz"
+    local libuv_file="libuv-$libuv_ver.tar.gz"
+    local libuv_dir="libuv-$libuv_ver"
+    if [ $use_dynamic -eq 1 ]; then
+        local libuv_params="--enable-shared"
+    else
+        local libuv_params="--disable-shared --enable-static"
+    fi
+
+    package_download $name $libuv_url $libuv_file
+    if [ $download_only -eq 1 ]; then
+        return
+    fi
+
+    package_extract $name $libuv_file $libuv_dir
+
+    # linking with static library requires -fPIC
+    if [ $use_dynamic -eq 0 ]; then
+        export CFLAGS="-fPIC"
+    fi
+    package_configure $name $libuv_dir $install_dir "$libuv_params"
+    if [ $use_dynamic -eq 0 ]; then
+        unset CFLAGS
+    fi
+
+    package_build $name $libuv_dir
+    package_install $name $libuv_dir $install_dir
 }
 
 zlib_pkg() {
@@ -375,8 +425,8 @@ sqlite_pkg() {
     local build_dir=$1
     local install_dir=$2
     local name="SQLite"
-    local sqlite_ver="3090100"
-    local sqlite_url="http://www.sqlite.org/2015/sqlite-autoconf-$sqlite_ver.tar.gz"
+    local sqlite_ver="3100100"
+    local sqlite_url="http://www.sqlite.org/2016/sqlite-autoconf-$sqlite_ver.tar.gz"
     local sqlite_file="sqlite-$sqlite_ver.tar.gz"
     local sqlite_dir="sqlite-autoconf-$sqlite_ver"
     if [ $use_dynamic -eq 1 ]; then
@@ -425,7 +475,7 @@ curl_pkg() {
     local build_dir=$1
     local install_dir=$2
     local name="cURL"
-    local curl_ver="7.45.0"
+    local curl_ver="7.46.0"
     local curl_url="http://curl.haxx.se/download/curl-$curl_ver.tar.gz"
     local curl_file="curl-$curl_ver.tar.gz"
     local curl_dir="curl-$curl_ver"
@@ -590,7 +640,7 @@ build_sdk() {
     local freeimage_flags=""
     local megaapi_flags=""
     local openssl_flags=""
-    local sodium_flags=""
+    local sodium_flags="--without-sodium"
     local cwd=$(pwd)
 
     echo "Configuring MEGA SDK"
@@ -689,7 +739,7 @@ display_help() {
     local app=$(basename "$0")
     echo ""
     echo "Usage:"
-    echo " $app [-a] [-c] [-h] [-d] [-f] [-l] [-m opts] [-n] [-o path] [-p path] [-r] [-s] [-t] [-w] [-x opts] [-y]"
+    echo " $app [-a] [-c] [-h] [-d] [-f] [-l] [-m opts] [-n] [-o path] [-p path] [-r] [-s] [-t] [-w] [-x opts] [-y] [-q]"
     echo ""
     echo "By the default this script builds static megacli executable."
     echo "This script can be run with numerous options to configure and build MEGA SDK."
@@ -705,12 +755,14 @@ display_help() {
     echo " -r : Enable Android build"
     echo " -t : Disable POSIX Threads support"
     echo " -u : Enable Sodium cryptographic library"
+    echo " -v : Enable libuv"
     echo " -w : Download software archives and exit"
     echo " -y : Build dynamic library and executable (instead of static)"
     echo " -m [opts]: make options"
     echo " -x [opts]: configure options"
     echo " -o [path]: Directory to store and look for downloaded archives"
     echo " -p [path]: Installation directory"
+    echo " -q : Use Crypto++"
     echo ""
 }
 
@@ -723,7 +775,7 @@ main() {
     # by the default store archives in work_dir
     local_dir=$work_dir
 
-    while getopts ":hacdflm:no:p:rstuyx:w" opt; do
+    while getopts ":hacdflm:no:p:rstuvyx:wq" opt; do
         case $opt in
             h)
                 display_help $0
@@ -742,7 +794,7 @@ main() {
                 debug="--enable-debug"
                 ;;
             f)
-                echo "* Disabling FreeImage"
+                echo "* Disabling external FreeImage"
                 disable_freeimage=1
                 ;;
             l)
@@ -766,6 +818,10 @@ main() {
                 install_dir=$(readlink -f $OPTARG)
                 echo "* Installing into $install_dir"
                 ;;
+            q)
+                echo "* Enabling external Crypto++"
+                enable_cryptopp=1
+                ;;
             r)
                 echo "* Building for Android"
                 android_build=1
@@ -779,7 +835,11 @@ main() {
                 ;;
             u)
                 enable_sodium=1
-                echo "* Enabling Sodium."
+                echo "* Enabling external Sodium."
+                ;;
+            v)
+                enable_libuv=1
+                echo "* Enabling external libuv."
                 ;;
             w)
                 download_only=1
@@ -845,7 +905,11 @@ main() {
             openssl_pkg $build_dir $install_dir
         fi
     fi
-    cryptopp_pkg $build_dir $install_dir
+    
+    if [ $enable_cryptopp -eq 1 ]; then
+        cryptopp_pkg $build_dir $install_dir
+    fi
+	
     if [ $enable_sodium -eq 1 ]; then
         sodium_pkg $build_dir $install_dir
     fi
@@ -855,6 +919,10 @@ main() {
     if [ "$(expr substr $(uname -s) 1 10)" != "MINGW32_NT" ]; then
         cares_pkg $build_dir $install_dir
         curl_pkg $build_dir $install_dir
+    fi
+
+    if [ $enable_libuv -eq 1 ]; then
+        libuv_pkg $build_dir $install_dir
     fi
 
     if [ $disable_freeimage -eq 0 ]; then

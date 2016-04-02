@@ -68,6 +68,8 @@ public:
 #endif
 
     bool notifyerr;
+    int defaultfilepermissions;
+    int defaultfolderpermissions;
 
     FileAccess* newfileaccess();
     DirAccess* newdiraccess();
@@ -98,6 +100,11 @@ public:
 
     static void emptydirlocal(string*, dev_t = 0);
 
+    int getdefaultfilepermissions();
+    void setdefaultfilepermissions(int);
+    int getdefaultfolderpermissions();
+    void setdefaultfolderpermissions(int);
+
     PosixFileSystemAccess(int = -1);
     ~PosixFileSystemAccess();
 };
@@ -121,6 +128,7 @@ class MEGA_API PosixFileAccess : public FileAccess
 {
 public:
     int fd;
+    int defaultfilepermissions;
 
 #ifndef HAVE_FDOPENDIR
     DIR* dp;
@@ -144,7 +152,7 @@ public:
     virtual void asyncsysread(AsyncIOContext* context);
     virtual void asyncsyswrite(AsyncIOContext* context);
 
-    PosixFileAccess(Waiter *w);
+    PosixFileAccess(Waiter *w, int defaultfilepermissions = 0600);
     ~PosixFileAccess();
 
 protected:

@@ -856,6 +856,20 @@ bool Node::isbelow(Node* p) const
     }
 }
 
+void Node::setpubliclink(handle ph, m_time_t ets, bool takendown)
+{
+    if (!plink) // creation
+    {
+        plink = new PublicLink(ph, ets, takendown);
+    }
+    else            // update
+    {
+        plink->ph = ph;
+        plink->ets = ets;
+        plink->takendown = takendown;
+    }
+}
+
 NodeCore::NodeCore()
 {
     attrstring = NULL;
@@ -1504,6 +1518,8 @@ LocalNode* LocalNode::unserialize(Sync* sync, string* d)
     const char* localname = ptr;
     ptr += localnamelen;
     uint64_t mtime = 0;
+    int32_t crc[4];
+    memset(crc, 0, sizeof crc);
 
     if (type == FILENODE)
     {
@@ -1513,7 +1529,10 @@ LocalNode* LocalNode::unserialize(Sync* sync, string* d)
             return NULL;
         }
 
-        if (!Serialize64::unserialize((byte*)ptr + 4 * sizeof(int32_t), end - ptr - 4 * sizeof(int32_t), &mtime))
+        memcpy(crc, ptr, sizeof crc);
+        ptr += sizeof crc;
+
+        if (Serialize64::unserialize((byte*)ptr, end - ptr, &mtime) < 0)
         {
             LOG_err << "LocalNode unserialization failed - malformed fingerprint mtime";
             return NULL;
@@ -1533,7 +1552,7 @@ LocalNode* LocalNode::unserialize(Sync* sync, string* d)
     l->name.assign(localname, localnamelen);
     sync->client->fsaccess->local2name(&l->name);
 
-    memcpy(l->crc, ptr, sizeof l->crc);
+    memcpy(l->crc, crc, sizeof crc);
     l->mtime = mtime;
     l->isvalid = 1;
 

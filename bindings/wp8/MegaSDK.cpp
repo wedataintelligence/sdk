@@ -151,70 +151,110 @@ void MegaSDK::addGlobalListener(MGlobalListenerInterface^ listener)
 
 void MegaSDK::removeListener(MListenerInterface^ listener)
 {
-	EnterCriticalSection(&listenerMutex);
-	std::set<DelegateMListener *>::iterator it = activeMegaListeners.begin();
-	while (it != activeMegaListeners.end())
-	{
-		DelegateMListener *delegate = *it;
-		if (delegate->getUserListener() == listener)
-		{
-			megaApi->removeListener(delegate);
-			activeMegaListeners.erase(it++);
-		}
-		else it++;
-	}
-	LeaveCriticalSection(&listenerMutex);
+    std::vector<DelegateMListener *> listenersToRemove;
+
+    EnterCriticalSection(&listenerMutex);
+    std::set<DelegateMListener *>::iterator it = activeMegaListeners.begin();
+    while (it != activeMegaListeners.end())
+    {
+        DelegateMListener *delegate = *it;
+        if (delegate->getUserListener() == listener)
+        {
+            listenersToRemove.push_back(delegate);
+            activeMegaListeners.erase(it++);
+        }
+        else
+        {
+            it++;
+        }
+    }
+    LeaveCriticalSection(&listenerMutex);
+
+    for (int i = 0; i < listenersToRemove.size(); i++)
+    {
+        megaApi->removeListener(listenersToRemove[i]);
+    }
 }
 
 void MegaSDK::removeRequestListener(MRequestListenerInterface^ listener)
 {
-	EnterCriticalSection(&listenerMutex);
-	std::set<DelegateMRequestListener *>::iterator it = activeRequestListeners.begin();
-	while (it != activeRequestListeners.end())
-	{
-		DelegateMRequestListener *delegate = *it;
-		if (delegate->getUserListener() == listener)
-		{
-			megaApi->removeRequestListener(delegate);
-			activeRequestListeners.erase(it++);
-		}
-		else it++;
-	}
-	LeaveCriticalSection(&listenerMutex);
+    std::vector<DelegateMRequestListener *> listenersToRemove;
+
+    EnterCriticalSection(&listenerMutex);
+    std::set<DelegateMRequestListener *>::iterator it = activeRequestListeners.begin();
+    while (it != activeRequestListeners.end())
+    {
+        DelegateMRequestListener *delegate = *it;
+        if (delegate->getUserListener() == listener)
+        {
+            listenersToRemove.push_back(delegate);
+            activeRequestListeners.erase(it++);
+        }
+        else
+        {
+            it++;
+        }
+    }
+    LeaveCriticalSection(&listenerMutex);
+
+    for (int i = 0; i < listenersToRemove.size(); i++)
+    {
+        megaApi->removeRequestListener(listenersToRemove[i]);
+    }
 }
 
 void MegaSDK::removeTransferListener(MTransferListenerInterface^ listener)
 {
-	EnterCriticalSection(&listenerMutex);
-	std::set<DelegateMTransferListener *>::iterator it = activeTransferListeners.begin();
-	while (it != activeTransferListeners.end())
-	{
-		DelegateMTransferListener *delegate = *it;
-		if (delegate->getUserListener() == listener)
-		{
-			megaApi->removeTransferListener(delegate);
-			activeTransferListeners.erase(it++);
-		}
-		else it++;
-	}
-	LeaveCriticalSection(&listenerMutex);
+    std::vector<DelegateMTransferListener *> listenersToRemove;
+
+    EnterCriticalSection(&listenerMutex);
+    std::set<DelegateMTransferListener *>::iterator it = activeTransferListeners.begin();
+    while (it != activeTransferListeners.end())
+    {
+        DelegateMTransferListener *delegate = *it;
+        if (delegate->getUserListener() == listener)
+        {
+            listenersToRemove.push_back(delegate);
+            activeTransferListeners.erase(it++);
+        }
+        else
+        {
+            it++;
+        }
+    }
+    LeaveCriticalSection(&listenerMutex);
+
+    for (int i = 0; i < listenersToRemove.size(); i++)
+    {
+        megaApi->removeTransferListener(listenersToRemove[i]);
+    }
 }
 
 void MegaSDK::removeGlobalListener(MGlobalListenerInterface^ listener)
 {
-	EnterCriticalSection(&listenerMutex);
-	std::set<DelegateMGlobalListener *>::iterator it = activeGlobalListeners.begin();
-	while (it != activeGlobalListeners.end())
-	{
-		DelegateMGlobalListener *delegate = *it;
-		if (delegate->getUserListener() == listener)
-		{
-			megaApi->removeGlobalListener(delegate);
-			activeGlobalListeners.erase(it++);
-		}
-		else it++;
-	}
-	LeaveCriticalSection(&listenerMutex);
+    std::vector<DelegateMGlobalListener *> listenersToRemove;
+
+    EnterCriticalSection(&listenerMutex);
+    std::set<DelegateMGlobalListener *>::iterator it = activeGlobalListeners.begin();
+    while (it != activeGlobalListeners.end())
+    {
+        DelegateMGlobalListener *delegate = *it;
+        if (delegate->getUserListener() == listener)
+        {
+            listenersToRemove.push_back(delegate);
+            activeGlobalListeners.erase(it++);
+        }
+        else
+        {
+            it++;
+        }
+    }
+    LeaveCriticalSection(&listenerMutex);
+
+    for (int i = 0; i < listenersToRemove.size(); i++)
+    {
+        megaApi->removeGlobalListener(listenersToRemove[i]);
+    }
 }
 
 String^ MegaSDK::getBase64PwKey(String^ password)
@@ -537,6 +577,55 @@ void MegaSDK::createAccount(String^ email, String^ password, String^ name, MRequ
 		(password != nullptr) ? utf8password.c_str() : NULL,
 		(name != nullptr) ? utf8name.c_str() : NULL,
 		createDelegateMRequestListener(listener));
+}
+
+void MegaSDK::createAccount(String^ email, String^ password, String^ firstname, String^ lastname)
+{
+    std::string utf8email;
+    if (email != nullptr)
+        MegaApi::utf16ToUtf8(email->Data(), email->Length(), &utf8email);
+
+    std::string utf8password;
+    if (password != nullptr)
+        MegaApi::utf16ToUtf8(password->Data(), password->Length(), &utf8password);
+
+    std::string utf8firstname;
+    if (firstname != nullptr)
+        MegaApi::utf16ToUtf8(firstname->Data(), firstname->Length(), &utf8firstname);
+
+    std::string utf8lastname;
+    if (lastname != nullptr)
+        MegaApi::utf16ToUtf8(lastname->Data(), lastname->Length(), &utf8lastname);
+
+    megaApi->createAccount((email != nullptr) ? utf8email.c_str() : NULL,
+        (password != nullptr) ? utf8password.c_str() : NULL,
+        (firstname != nullptr) ? utf8firstname.c_str() : NULL,
+        (lastname != nullptr) ? utf8lastname.c_str() : NULL);
+}
+
+void MegaSDK::createAccount(String^ email, String^ password, String^ firstname, String^ lastname, MRequestListenerInterface^ listener)
+{
+    std::string utf8email;
+    if (email != nullptr)
+        MegaApi::utf16ToUtf8(email->Data(), email->Length(), &utf8email);
+
+    std::string utf8password;
+    if (password != nullptr)
+        MegaApi::utf16ToUtf8(password->Data(), password->Length(), &utf8password);
+
+    std::string utf8firstname;
+    if (firstname != nullptr)
+        MegaApi::utf16ToUtf8(firstname->Data(), firstname->Length(), &utf8firstname);
+
+    std::string utf8lastname;
+    if (lastname != nullptr)
+        MegaApi::utf16ToUtf8(lastname->Data(), lastname->Length(), &utf8lastname);
+
+    megaApi->createAccount((email != nullptr) ? utf8email.c_str() : NULL,
+        (password != nullptr) ? utf8password.c_str() : NULL,
+        (firstname != nullptr) ? utf8firstname.c_str() : NULL,
+        (lastname != nullptr) ? utf8lastname.c_str() : NULL,
+        createDelegateMRequestListener(listener));
 }
 
 void MegaSDK::fastCreateAccount(String^ email, String^ base64pwkey, String^ name)
@@ -2193,6 +2282,42 @@ MNode^ MegaSDK::getNodeByFingerprint(String^ fingerprint, MNode^ parent)
     MegaApi::utf16ToUtf8(fingerprint->Data(), fingerprint->Length(), &utf8fingerprint);
 
     MegaNode *node = megaApi->getNodeByFingerprint(utf8fingerprint.c_str(), parent->getCPtr());
+    return node ? ref new MNode(node, true) : nullptr;
+}
+
+MNodeList^ MegaSDK::getNodesByFingerprint(String^ fingerprint)
+{
+    if (fingerprint == nullptr) return nullptr;
+
+    std::string utf8fingerprint;
+    MegaApi::utf16ToUtf8(fingerprint->Data(), fingerprint->Length(), &utf8fingerprint);
+
+    MegaNodeList *nodes = megaApi->getNodesByFingerprint(utf8fingerprint.c_str());
+    return nodes ? ref new MNodeList(nodes, true) : nullptr;
+}
+
+MNode^ MegaSDK::getExportableNodeByFingerprint(String^ fingerprint)
+{
+    if (fingerprint == nullptr) return nullptr;
+
+    std::string utf8fingerprint;
+    MegaApi::utf16ToUtf8(fingerprint->Data(), fingerprint->Length(), &utf8fingerprint);
+
+    MegaNode *node = megaApi->getExportableNodeByFingerprint(utf8fingerprint.c_str());
+    return node ? ref new MNode(node, true) : nullptr;
+}
+
+MNode^ MegaSDK::getExportableNodeByFingerprint(String^ fingerprint, String^ name)
+{
+    if (fingerprint == nullptr || name == nullptr) return nullptr;
+
+    std::string utf8fingerprint;
+    MegaApi::utf16ToUtf8(fingerprint->Data(), fingerprint->Length(), &utf8fingerprint);
+
+    std::string utf8name;
+    MegaApi::utf16ToUtf8(name->Data(), name->Length(), &utf8name);
+
+    MegaNode *node = megaApi->getExportableNodeByFingerprint(utf8fingerprint.c_str(), utf8name.c_str());
     return node ? ref new MNode(node, true) : nullptr;
 }
 

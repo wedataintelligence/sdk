@@ -58,6 +58,10 @@ public:
     // wait for I/O or other events
     int wait();
 
+    // splitted implementation of wait() for a better thread management
+    int preparewait();
+    int dowait();
+
     // abort exponential backoff
     bool abortbackoff(bool = true);
 
@@ -120,7 +124,7 @@ public:
     void killallsessions();
 
     // set folder link: node, key
-    error folderaccess(const char*, const char*);
+    error folderaccess(const char*folderlink);
 
     // open exported file link
     error openfilelink(const char*, int);
@@ -193,7 +197,7 @@ public:
     void putnodes(const char*, NewNode*, int);
 
     // attach file attribute to upload or node handle
-    void putfa(handle, fatype, SymmCipher*, string*);
+    void putfa(handle, fatype, SymmCipher*, string*, bool checkAccess = true);
 
     // queue file attribute retrieval
     error getfa(Node*, fatype, int = 0);
@@ -284,6 +288,33 @@ public:
     // clean rubbish bin
     void cleanrubbishbin();
 
+#ifdef ENABLE_CHAT
+
+    // create a new chat with multiple users and different privileges
+    void createChat(bool group, const userpriv_vector *userpriv);
+
+    // fetch the list of chats
+    void fetchChats();
+
+    // invite a user to a chat
+    void inviteToChat(handle chatid, const char *uid, int priv);
+
+    // remove a user from a chat
+    void removeFromChat(handle chatid, const char *uid = NULL);
+
+    // get the URL of a chat
+    void getUrlChat(handle chatid);
+
+    // process object arrays by the API server (users + privileges)
+    userpriv_vector * readuserpriv(JSON* j);
+
+    // grant access to a chat peer to one specific node
+    void grantAccessInChat(handle chatid, handle h, const char *uid);
+
+    // revoke access to a chat peer to one specific node
+    void removeAccessInChat(handle chatid, handle h, const char *uid);
+#endif
+
     // toggle global debug flag
     bool toggledebug();
 
@@ -312,6 +343,12 @@ public:
 
     // disable public key pinning (for testing purposes)
     static bool disablepkp;
+
+    // retry API_ESSL errors
+    bool retryessl;
+
+    // timestamp until the bandwidth is overquota in deciseconds, related to Waiter::ds
+    m_time_t overquotauntil;
 
     // root URL for API requests
     static string APIURL;
@@ -385,6 +422,9 @@ private:
     void sc_ipc();
     void sc_upc();
     void sc_ph();
+#ifdef ENABLE_CHAT
+    void sc_chatupdate();
+#endif
 
     void init();
 
@@ -568,6 +608,11 @@ public:
     node_vector nodenotify;
     void notifynode(Node*);
 
+#ifdef ENABLE_CHAT
+    textchat_vector chatnotify;
+    void notifychat(TextChat *);
+#endif
+
     // write changed/added/deleted users to the DB cache and notify the
     // application
     void notifypurge();
@@ -577,6 +622,7 @@ public:
 
     Node* nodebyhandle(handle);
     Node* nodebyfingerprint(FileFingerprint*);
+    node_vector *nodesbyfingerprint(FileFingerprint* fingerprint);
 
     // generate & return upload handle
     handle getuploadhandle();
@@ -740,6 +786,7 @@ public:
     static const int USERHANDLE = 8;
     static const int PCRHANDLE = 8;
     static const int NODEHANDLE = 6;
+    static const int CHATHANDLE = 8;
     static const int SESSIONHANDLE = 8;
     static const int PURCHASEHANDLE = 8;
 
@@ -794,6 +841,9 @@ public:
     // set authentication context, either a session ID or a exported folder node handle
     void setsid(const byte*, unsigned);
     void setrootnode(handle);
+
+    // returns the handle of the root node if the account is logged into a public folder, otherwise UNDEF.
+    handle getrootpublicfolder();
 
     // process node subtree
     void proctree(Node*, TreeProc*, bool skipinshares = false);

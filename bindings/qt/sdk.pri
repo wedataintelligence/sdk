@@ -37,15 +37,30 @@ SOURCES += src/attrmap.cpp \
     src/gfx/qt.cpp \
     src/gfx/external.cpp \
     src/thread/qtthread.cpp \
-    src/megaapi.cpp \
-    src/megaapi_impl.cpp \
-    bindings/qt/QTMegaRequestListener.cpp \
-    bindings/qt/QTMegaTransferListener.cpp \
-    bindings/qt//QTMegaGlobalListener.cpp \
-    bindings/qt/QTMegaSyncListener.cpp \
-    bindings/qt/QTMegaListener.cpp \
-    bindings/qt/QTMegaEvent.cpp \
     src/mega_utf8proc.cpp
+
+CONFIG(USE_MEGAAPI) {
+    SOURCES += src/megaapi.cpp src/megaapi_impl.cpp \
+        bindings/qt/QTMegaRequestListener.cpp \
+        bindings/qt/QTMegaTransferListener.cpp \
+        bindings/qt//QTMegaGlobalListener.cpp \
+        bindings/qt/QTMegaSyncListener.cpp \
+        bindings/qt/QTMegaListener.cpp \
+        bindings/qt/QTMegaEvent.cpp
+}
+
+# CONFIG += USE_LIBUV
+CONFIG(USE_LIBUV) {
+    SOURCES += src/mega_http_parser.cpp
+    DEFINES += HAVE_LIBUV
+    INCLUDEPATH += $$MEGASDK_BASE_PATH/bindings/qt/3rdparty/include/libuv
+    win32 {
+        LIBS += -llibuv
+    }
+    else {
+        LIBS += -luv
+    }
+}
 
 win32 {
     # comment this line to use WinHTTP on Windows
@@ -64,8 +79,10 @@ win32 {
             src/win32/fs.cpp \
             src/win32/waiter.cpp
         HEADERS += include/mega/win32/meganet.h
-        LIBS += -lwinhttp
     }
+
+    # link winhttp anyway (required for automatic proxy detection)
+    LIBS += -lwinhttp
 }
 
 
@@ -170,25 +187,24 @@ win32 {
         INCLUDEPATH += $$MEGASDK_BASE_PATH/include/mega/win32
     }
 
-    INCLUDEPATH += $$MEGASDK_BASE_PATH/bindings/qt/3rdparty/include/cryptopp
     DEFINES += PCRE_STATIC
 
     contains(CONFIG, BUILDX64) {
-	release {
-            LIBS += -L"$$MEGASDK_BASE_PATH/bindings/qt/3rdparty/libs/static_x64"
-	}
-	else {
-            LIBS += -L"$$MEGASDK_BASE_PATH/bindings/qt/3rdparty/libs/staticd_x64"
-	}
+       release {
+            LIBS += -L"$$MEGASDK_BASE_PATH/bindings/qt/3rdparty/libs/x64"
+        }
+        else {
+            LIBS += -L"$$MEGASDK_BASE_PATH/bindings/qt/3rdparty/libs/x64d"
+        }
     }
 
     !contains(CONFIG, BUILDX64) {
-	release {
-            LIBS += -L"$$MEGASDK_BASE_PATH/bindings/qt/3rdparty/libs/static"
-	}
-	else {
-            LIBS += -L"$$MEGASDK_BASE_PATH/bindings/qt/3rdparty/libs/staticd"
-	}
+        release {
+            LIBS += -L"$$MEGASDK_BASE_PATH/bindings/qt/3rdparty/libs/x32"
+        }
+        else {
+            LIBS += -L"$$MEGASDK_BASE_PATH/bindings/qt/3rdparty/libs/x32d"
+        }
     }
 
     LIBS += -lshlwapi -lws2_32 -luser32
@@ -196,35 +212,20 @@ win32 {
 
 unix:!macx {
    INCLUDEPATH += $$MEGASDK_BASE_PATH/include/mega/posix
-   INCLUDEPATH += /usr/include/cryptopp
-
-   DEFINES += USE_SODIUM
-   HEADERS += ./include/mega/crypto/sodium.h
-   SOURCES += ./src/crypto/sodium.cpp
 
    LIBS += -lsqlite3 -lrt
 
    exists($$MEGASDK_BASE_PATH/bindings/qt/3rdparty/libs/libcurl.a) {
-    INCLUDEPATH += $$MEGASDK_BASE_PATH/bindings/qt/3rdparty/include
     LIBS += -L$$MEGASDK_BASE_PATH/bindings/qt/3rdparty/libs/ $$MEGASDK_BASE_PATH/bindings/qt/3rdparty/libs/libcurl.a -lz -lssl -lcrypto -lcares
    }
    else {
     LIBS += -lcurl -lz -lssl -lcrypto -lcares
    }
-
-   exists($$MEGASDK_BASE_PATH/bindings/qt/3rdparty/libs/libsodium.a) {
-    LIBS +=  $$MEGASDK_BASE_PATH/bindings/qt/3rdparty/libs/libsodium.a
-   }
-   else {
-    LIBS += -lsodium
-   }
-
 }
 
 macx {
    INCLUDEPATH += $$MEGASDK_BASE_PATH/include/mega/posix
-   INCLUDEPATH += $$MEGASDK_BASE_PATH/bindings/qt/3rdparty/include/cryptopp
-   SOURCES += $$MEGASDK_BASE_PATH/bindings/qt/3rdparty/qt/libs/sqlite3.c
+   SOURCES += $$MEGASDK_BASE_PATH/bindings/qt/3rdparty/sqlite3.c
    INCLUDEPATH += $$MEGASDK_BASE_PATH/bindings/qt/3rdparty/include/curl
    DEFINES += PCRE_STATIC _DARWIN_FEATURE_64_BIT_INODE
    LIBS += -L$$MEGASDK_BASE_PATH/bindings/qt/3rdparty/libs/ $$MEGASDK_BASE_PATH/bindings/qt/3rdparty/libs/libcares.a $$MEGASDK_BASE_PATH/bindings/qt/3rdparty/libs/libcurl.a -lz -lssl -lcrypto

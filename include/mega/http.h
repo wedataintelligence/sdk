@@ -135,6 +135,9 @@ struct MEGA_API HttpIO : public EventTrigger
     // set useragent (must be called exactly once)
     virtual void setuseragent(string*) = 0;
 
+    // get proxy settings from the system
+    virtual Proxy *getautoproxy();
+
     void getMEGADNSservers(string*, bool = true);
 
     HttpIO();
@@ -153,6 +156,8 @@ struct MEGA_API HttpReq
     string posturl;
 
     bool chunked;
+    bool protect;
+
     bool sslcheckfailed;
     string sslfakeissuer;
 
@@ -168,6 +173,9 @@ struct MEGA_API HttpReq
 
     // we assume that API responses are smaller than 4 GB
     m_off_t contentlength;
+
+    // time left related to a bandwidth overquota
+    m_time_t timeleft;
 
     // HttpIO implementation-specific identifier for this connection
     void* httpiohandle;
@@ -213,6 +221,7 @@ struct MEGA_API HttpReq
 
     HttpReq(bool = false);
     virtual ~HttpReq();
+    void init();
 };
 
 // file chunk I/O

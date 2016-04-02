@@ -93,7 +93,7 @@ struct MEGA_API HttpReqCommandPutFA : public HttpReq, public Command
 
     void procresult();
 
-    HttpReqCommandPutFA(MegaClient*, handle, fatype, string*);
+    HttpReqCommandPutFA(MegaClient*, handle, fatype, string*, bool);
     ~HttpReqCommandPutFA();
 };
 
@@ -456,6 +456,7 @@ public:
 class MEGA_API CommandSetPH : public Command
 {
     handle h;
+    m_time_t ets;
 
 public:
     void procresult();
@@ -468,6 +469,7 @@ class MEGA_API CommandGetPH : public Command
     handle ph;
     byte key[FILENODEKEYLENGTH];
     int op;
+    bool havekey;
 
 public:
     void procresult();
@@ -598,6 +600,79 @@ public:
 
     CommandCleanRubbishBin(MegaClient*);
 };
+
+
+#ifdef ENABLE_CHAT
+class MEGA_API CommandChatCreate : public Command
+{
+    MegaClient *client;
+    userpriv_vector *chatPeers;
+
+public:
+    void procresult();
+
+    CommandChatCreate(MegaClient*, bool group, const userpriv_vector*);
+};
+
+class MEGA_API CommandChatFetch : public Command
+{
+    MegaClient *client;
+public:
+    void procresult();
+
+    CommandChatFetch(MegaClient*);
+};
+
+class MEGA_API CommandChatInvite : public Command
+{
+    MegaClient *client;
+
+public:
+    void procresult();
+
+    CommandChatInvite(MegaClient*, handle, const char *, privilege_t);
+};
+
+class MEGA_API CommandChatRemove : public Command
+{
+    MegaClient *client;
+public:
+    void procresult();
+
+    CommandChatRemove(MegaClient*, handle, const char * = NULL);
+};
+
+class MEGA_API CommandChatURL : public Command
+{
+    MegaClient *client;
+
+public:
+    void procresult();
+
+    CommandChatURL(MegaClient*, handle);
+};
+
+class MEGA_API CommandChatGrantAccess : public Command
+{
+    MegaClient *client;
+
+public:
+    void procresult();
+
+    CommandChatGrantAccess(MegaClient*, handle, handle, const char *);
+};
+
+class MEGA_API CommandChatRemoveAccess : public Command
+{
+    MegaClient *client;
+
+public:
+    void procresult();
+
+    CommandChatRemoveAccess(MegaClient*, handle, handle, const char *);
+};
+#endif
+
 
 } // namespace
 
