@@ -53,6 +53,9 @@ const char MegaClient::PAYMENT_PUBKEY[] =
         "ym1mA5iSSsMroGLypv9PueOTfZlG3UTpD83v6F3w8uGHY9phFZ-k2JbCd_-s-7gyfBE"
         "TpPvuz-oZABEBAAE";
 
+// default number of seconds to wait after a bandwidth overquota
+dstime MegaClient::DEFAULT_BW_OVERQUOTA_BACKOFF_SECS = 3600;
+
 // decrypt key (symmetric or asymmetric), rewrite asymmetric to symmetric key
 bool MegaClient::decryptkey(const char* sk, byte* tk, int tl, SymmCipher* sc, int type, handle node)
 {
@@ -429,6 +432,12 @@ void MegaClient::setrootnode(handle h)
 
     auth = "&n=";
     auth.append(buf);
+
+    if (accountauth.size())
+    {
+        auth.append("&sid=");
+        auth.append(accountauth);
+    }
 }
 
 handle MegaClient::getrootpublicfolder()
@@ -838,8 +847,11 @@ void MegaClient::exec()
                             {
                                 // reduce the number of required attributes to let the upload continue
                                 transfer->minfa--;
-                                checkfacompletion(fa->th);
+                                checkfacompletion(fa->th);                                
+                                int creqtag = reqtag;
+                                reqtag = 0;
                                 sendevent(99407,"Attribute attach failed during active upload");
+                                reqtag = creqtag;
                                 break;
                             }
                         }
@@ -1981,6 +1993,11 @@ bool MegaClient::abortbackoff(bool includexfers)
                 }
             }
         }
+
+        for (handledrn_map::iterator it = hdrns.begin(); it != hdrns.end();)
+        {
+            (it++)->second->retry(API_OK);
+        }
     }
 
     if (btcs.arm())
@@ -2073,7 +2090,7 @@ bool MegaClient::dispatch(direction_t d)
                 // locate suitable template file
                 for (file_list::iterator it = nextit->second->files.begin(); it != nextit->second->files.end(); it++)
                 {
-                    if ((*it)->hprivate)
+                    if ((*it)->hprivate && !(*it)->hforeign)
                     {
                         // the size field must be valid right away for
                         // MegaClient::moretransfers()
@@ -2168,7 +2185,8 @@ bool MegaClient::dispatch(direction_t d)
             {
                 handle h = UNDEF;
                 bool hprivate = true;
-                const char *auth = NULL;
+                const char *privauth = NULL;
+                const char *pubauth = NULL;
 
                 nextit->second->pos = 0;
 
@@ -2210,12 +2228,17 @@ bool MegaClient::dispatch(direction_t d)
                     for (file_list::iterator it = nextit->second->files.begin();
                          it != nextit->second->files.end(); it++)
                     {
-                        if (!(*it)->hprivate || nodebyhandle((*it)->h))
+                        if (!(*it)->hprivate || (*it)->hforeign || nodebyhandle((*it)->h))
                         {
                             h = (*it)->h;
                             hprivate = (*it)->hprivate;
-                            auth = (*it)->auth.size() ? (*it)->auth.c_str() : NULL;
+                            privauth = (*it)->privauth.size() ? (*it)->privauth.c_str() : NULL;
+                            pubauth = (*it)->pubauth.size() ? (*it)->pubauth.c_str() : NULL;
                             break;
+                        }
+                        else
+                        {
+                            LOG_err << "Unexpected node ownership";
                         }
                     }
                 }
@@ -2223,7 +2246,7 @@ bool MegaClient::dispatch(direction_t d)
                 // dispatch request for temporary source/target URL
                 reqs.add((ts->pendingcmd = (d == PUT)
                           ? (Command*)new CommandPutFile(this, ts, putmbpscap)
-                          : (Command*)new CommandGetFile(this, ts, NULL, h, hprivate, auth)));
+                          : (Command*)new CommandGetFile(this, ts, NULL, h, hprivate, privauth, pubauth)));
 
                 ts->slots_it = tslots.insert(tslots.begin(), ts);
 
@@ -2727,6 +2750,11 @@ bool MegaClient::procsc()
                             case MAKENAMEID2('p','h'):
                                 // public links handles
                                 sc_ph();
+                                break;
+
+                            case MAKENAMEID2('s','e'):
+                                // set email
+                                sc_se();
                                 break;
 #ifdef ENABLE_CHAT
                             case MAKENAMEID3('m', 'c', 'c'):
@@ -4045,6 +4073,79 @@ void MegaClient::sc_ph()
             {
                 LOG_warn << "node for public link not found";
             }
+
+            break;
+        default:
+            if (!jsonsc.storeobject())
+            {
+                return;
+            }
+        }
+    }
+}
+
+void MegaClient::sc_se()
+{
+    // fields: e, s
+    string email;
+    int status = -1;
+    handle uh = UNDEF;
+    User *u;
+
+    bool done = false;
+    while (!done)
+    {
+        switch (jsonsc.getnameid())
+        {
+        case 'e':
+            jsonsc.storeobject(&email);
+            break;
+        case 'u':
+            uh = jsonsc.gethandle(USERHANDLE);
+            break;
+        case 's':
+            status = jsonsc.getint();
+            break;
+        case EOO:
+            done = true;
+            if (email.empty())
+            {
+                LOG_err << "e element not provided";
+                break;
+            }
+            if (uh == UNDEF)
+            {
+                LOG_err << "u element not provided";
+                break;
+            }
+            if (status == -1)
+            {
+                LOG_err << "s element not provided";
+                break;
+            }
+            if (status != EMAIL_REMOVED &&
+                    status != EMAIL_PENDING_REMOVED &&
+                    status != EMAIL_PENDING_ADDED &&
+                    status != EMAIL_FULLY_ACCEPTED)
+            {
+                LOG_err << "unknown value for s element: " << status;
+                break;
+            }
+
+            u = finduser(uh);
+            if (!u)
+            {
+                LOG_warn << "user for email change not found. Not a contact?";
+            }
+            else if (status == EMAIL_FULLY_ACCEPTED)
+            {
+                LOG_debug << "Email changed from `" << u->email << "` to `" << email << "`";
+
+                mapuser(uh, email.c_str()); // update email used as index for user's map
+                u->changed.email = true;               
+                notifyuser(u);
+            }
+            // TODO: manage different status once multiple-emails is supported
 
             break;
         default:
@@ -5535,33 +5636,7 @@ bool MegaClient::readusers(JSON* j)
 
         if (!warnlevel())
         {
-            User* u;
-
-            if (v == ME)
-            {
-                if (me != UNDEF && uh != me)
-                {
-                    char mehandle[sizeof me * 4 / 3 + 4];
-                    char uhhandle[sizeof uh * 4 / 3 + 4];
-
-                    Base64::btoa((const byte *)&me, sizeof me, mehandle);
-                    Base64::btoa((const byte *)&uh, sizeof uh, uhhandle);
-
-                    char report[256];
-                    sprintf(report, "Own user handle mismatch: %s - %s (%d)", mehandle, uhhandle, fetchingnodes);
-
-                    int creqtag = reqtag;
-                    reqtag = 0;
-                    sendevent(99403, report);
-                    reqtag = creqtag;
-                }
-                else
-                {
-                    me = uh;
-                }
-            }
-
-            u = finduser(uh, 0);
+            User* u = finduser(uh, 0);
             bool notify = !u;
             if (u || (u = finduser(uh, 1)))
             {
@@ -5960,8 +6035,13 @@ void MegaClient::mapuser(handle uh, const char* email)
         // yes: add email reference
         u = &users[hit->second];
 
-        if (!u->email.size())
-        {
+        if (strcmp(u->email.c_str(), email))
+        { 
+            if (u->email.size())
+            {
+                umindex.erase(u->email);
+            }
+
             Node::copystring(&u->email, email);
             umindex[nuid] = hit->second;
         }
@@ -7345,7 +7425,17 @@ void MegaClient::queueread(handle h, bool p, SymmCipher* key, int64_t ctriv, m_o
         it = hdrns.insert(hdrns.end(), pair<handle, DirectReadNode*>(h, new DirectReadNode(this, h, p, key, ctriv)));
         it->second->hdrn_it = it;
         it->second->enqueue(offset, count, reqtag, appdata);
-        it->second->dispatch();
+
+        if (overquotauntil && overquotauntil > Waiter::ds)
+        {
+            dstime timeleft = overquotauntil - Waiter::ds;
+            app->pread_failure(API_EOVERQUOTA, 0, appdata, timeleft);
+            it->second->schedule(timeleft);
+        }
+        else
+        {
+            it->second->dispatch();
+        }
     }
     else
     {
@@ -7380,7 +7470,7 @@ void MegaClient::abortreads(handle h, bool p, m_off_t offset, m_off_t count)
         {
             if ((offset < 0 || offset == (*it)->offset) && (count < 0 || count == (*it)->count))
             {
-                app->pread_failure(API_EINCOMPLETE, (*it)->drn->retries, (*it)->appdata);
+                app->pread_failure(API_EINCOMPLETE, (*it)->drn->retries, (*it)->appdata, 0);
 
                 delete *(it++);
             }
@@ -8166,6 +8256,9 @@ bool MegaClient::syncup(LocalNode* l, dstime* nds)
                             // same fingerprint, if available): no action needed
                             if (!ll->checked)
                             {
+                                // Restoration of missing attributes temporarily disabled
+                                // on synced folders
+                                /*
                                 if (gfx && gfx->isgfx(&ll->localname))
                                 {
                                     int missingattr = 0;
@@ -8190,6 +8283,7 @@ bool MegaClient::syncup(LocalNode* l, dstime* nds)
                                         gfx->gendimensionsputfa(NULL, &localpath, ll->node->nodehandle, symmcipher, missingattr);
                                     }
                                 }
+                                */
 
                                 ll->checked = true;
                             }
@@ -8938,7 +9032,9 @@ bool MegaClient::startxfer(direction_t d, File* f, bool skipdupes)
 
             if (overquotauntil && overquotauntil > Waiter::ds)
             {
-                t->bt.backoff(overquotauntil - Waiter::ds);
+                dstime timeleft = overquotauntil - Waiter::ds;
+                app->transfer_failed(t, API_EOVERQUOTA, timeleft);
+                t->bt.backoff(timeleft);
             }
         }
 

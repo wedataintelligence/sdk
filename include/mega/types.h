@@ -221,7 +221,7 @@ typedef vector<struct Node*> node_vector;
 // contact visibility:
 // HIDDEN - not shown
 // VISIBLE - shown
-typedef enum { VISIBILITY_UNKNOWN = -1, HIDDEN = 0, VISIBLE, ME } visibility_t;
+typedef enum { VISIBILITY_UNKNOWN = -1, HIDDEN = 0, VISIBLE = 1, INACTIVE = 2, BLOCKED = 3 } visibility_t;
 
 typedef enum { PUTNODES_APP, PUTNODES_SYNC, PUTNODES_SYNCDEBRIS } putsource_t;
 
@@ -391,6 +391,8 @@ struct TextChat
 };
 typedef vector<TextChat*> textchat_vector;
 #endif
+
+typedef enum { EMAIL_REMOVED = 0, EMAIL_PENDING_REMOVED = 1, EMAIL_PENDING_ADDED = 2, EMAIL_FULLY_ACCEPTED = 3 } emailstatus_t;
 
 } // namespace
 
