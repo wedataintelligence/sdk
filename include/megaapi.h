@@ -7079,6 +7079,21 @@ class MegaApi
         MegaNode *createForeignFolderNode(MegaHandle handle, const char *name, MegaHandle parentHandle, const char *privateAuth, const char *publicAuth);
 
         /**
+         * @brief Create a MegaNode that represents a public file
+         *
+         * The resulting node can be used in MegaApi::startDownload, MegaApi::startStreaming and MegaApi::copyNode
+         *
+         * You take the ownership of the returned value.
+         *
+         * @param base64handle Public handle of the file (base64-encoded)
+         * @param keystring Base64-encoded key of the file
+         * @param size Size of the file
+         * @param attrstring Encrypted attribute string of the file
+         * @return MegaNode object
+         */
+        MegaNode *createPublicFileNode(char *base64handle, const char *keystring, int64_t size, char *attrstring);
+
+        /**
          * @brief Get the SDK version
          *
          * The returned string is an statically allocated array.

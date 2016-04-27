@@ -1988,6 +1988,11 @@ MegaNode *MegaApi::createForeignFolderNode(MegaHandle handle, const char *name, 
     return pImpl->createForeignFolderNode(handle, name, parentHandle, privateAuth, publicAuth);
 }
 
+MegaNode *MegaApi::createPublicFileNode(char *base64handle, const char *keystring, int64_t size, char *attrstring)
+{
+    return pImpl->createPublicFileNode(MegaApi::base64ToHandle(base64handle), keystring, size, attrstring);
+}
+
 const char *MegaApi::getVersion()
 {
     return pImpl->getVersion();

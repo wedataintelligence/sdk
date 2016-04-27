@@ -5490,6 +5490,80 @@ MegaNode *MegaApiImpl::createForeignFolderNode(MegaHandle handle, const char *na
                                privateauth, publicauth, false, true);
 }
 
+MegaNode *MegaApiImpl::createPublicFileNode(MegaHandle nodehandle, const char *keystring, m_off_t size, char *attrstring)
+{
+    m_time_t mtime = 0;
+    byte *buf = NULL;
+    string fileName;
+    string fingerprint;
+    string attr;
+    string key;
+
+    key.resize(strlen(keystring) * 3 / 4 + 3);
+    key.resize(Base64::atob(keystring, (byte *)key.data(), key.size()));
+    attr.resize(strlen(attrstring) * 3 / 4 + 3);
+    attr.resize(Base64::atob(attrstring, (byte *)attr.data(), attr.size()));
+
+    if (key.size() >= FILENODE)
+    {
+        SymmCipher nodeKey;
+        nodeKey.setkey((const byte *)key.data(), FILENODE);
+        buf = Node::decryptattr(&nodeKey, attrstring, strlen(attrstring));
+    }
+
+    if (buf)
+    {
+        JSON json;
+        nameid name;
+        string* t;
+        AttrMap attrs;
+
+        json.begin((char*)buf+5);
+        while ((name = json.getnameid()) != EOO && json.storeobject((t = &attrs.map[name])))
+            JSON::unescape(t);
+
+        delete[] buf;
+
+        attr_map::iterator it;
+        it = attrs.map.find('n');
+        if (it == attrs.map.end()) fileName = "CRYPTO_ERROR";
+        else if (!it->second.size()) fileName = "BLANK";
+        else fileName = it->second.c_str();
+
+        it = attrs.map.find('c');
+        if(it != attrs.map.end())
+        {
+            FileFingerprint ffp;
+            if(ffp.unserializefingerprint(&it->second))
+            {
+                mtime = ffp.mtime;
+
+                char bsize[sizeof(size)+1];
+                int l = Serialize64::serialize((byte *)bsize, size);
+                char *buf = new char[l * 4 / 3 + 4];
+                char ssize = 'A' + Base64::btoa((const byte *)bsize, l, buf);
+
+                string result(1, ssize);
+                result.append(buf);
+                result.append(it->second);
+                delete [] buf;
+
+                fingerprint = result;
+            }
+        }
+    }
+    else
+    {
+        fileName = "CRYPTO_ERROR";
+    }
+
+
+    return new MegaNodePrivate(fileName.c_str(), FILENODE, size, 0, mtime, nodehandle, &key, &attr,
+                                                       fingerprint.size() ? fingerprint.c_str() : NULL,
+                                                       INVALID_HANDLE);
+}
+
+
 void MegaApiImpl::loadBalancing(const char* service, MegaRequestListener *listener)
 {
     MegaRequestPrivate *request = new MegaRequestPrivate(MegaRequest::TYPE_LOAD_BALANCING, listener);

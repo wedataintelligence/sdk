@@ -1391,6 +1391,7 @@ class MegaApiImpl : public MegaApp
                                        MegaHandle parentHandle, const char *privateauth, const char *publicauth);
         MegaNode *createForeignFolderNode(MegaHandle handle, const char *name, MegaHandle parentHandle,
                                          const char *privateauth, const char *publicauth);
+        MegaNode *createPublicFileNode(MegaHandle nodehandle, const char *keystring, m_off_t size, char *attrstring);
 
         void loadBalancing(const char* service, MegaRequestListener *listener = NULL);
 
