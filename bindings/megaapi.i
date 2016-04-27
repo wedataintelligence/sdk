@@ -140,6 +140,7 @@
 %ignore mega::MegaNode::getPublicAuth;
 %ignore mega::MegaApi::createForeignFileNode;
 %ignore mega::MegaApi::createForeignFolderNode;
+%ignore mega::MegaApi::createPublicFileNode;
 %ignore mega::MegaListener::onSyncStateChanged;
 %ignore mega::MegaListener::onSyncFileStateChanged;
 %ignore mega::MegaTransfer::getListener;

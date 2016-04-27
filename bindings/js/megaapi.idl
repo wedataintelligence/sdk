@@ -737,9 +737,7 @@ interface MegaApi
     MegaNode getRubbishNode();
     MegaNodeList search(MegaNode node, DOMString searchString, boolean recursive);
     boolean processMegaTree(MegaNode node, MegaTreeProcessorInterface processor, boolean recursive);
-    //MegaNode createPublicFileNode(MegaHandle handle, DOMString key, DOMString name,
-    //                               long size, long mtime, MegaHandle parentHandle, DOMString auth);
-    //MegaNode createPublicFolderNode(MegaHandle handle, DOMString name, MegaHandle parentHandle, DOMString auth);
+    MegaNode createPublicFileNode(DOMString base64handle, DOMString base64key, long size, DOMString attrstring);
     [Const] DOMString getVersion();
     [Const] DOMString getUserAgent();
     void changeApiUrl(DOMString apiURL, boolean disablepkp);
