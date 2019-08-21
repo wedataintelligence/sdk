@@ -72,6 +72,7 @@ typedef unsigned char byte;
 
 #include "mega/crypto/sodium.h"
 
+#include <memory>
 #include <string>
 #include <chrono>
 
@@ -91,7 +92,7 @@ using std::queue;
 using std::streambuf;
 using std::tuple;
 using std::ostringstream;
-
+using std::unique_ptr;
 
 // forward declaration
 struct AttrMap;
@@ -625,6 +626,17 @@ namespace CodeCounter
         }
 #endif
     };
+}
+
+
+// inside 'mega' namespace, since use C++11 and can't rely on C++14 yet, provide make_unique for the most common case.
+// This keeps our syntax small, while making sure the compiler ensures the object is deleted when no longer used.
+// Sometimes there will be ambiguity about std::make_unique vs mega::make_unique if cpp files "use namespace std", in which case specify ::mega::.
+// It's better that we use the same one in older and newer compilers so we detect any issues.
+template<class T, class... constructorArgs>
+unique_ptr<T> make_unique(constructorArgs&&... args)
+{
+    return (unique_ptr<T>(new T(std::forward<constructorArgs>(args)...)));
 }
 
 } // namespace

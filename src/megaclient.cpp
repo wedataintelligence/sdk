@@ -1049,7 +1049,7 @@ void MegaClient::init()
     mNotifiedSumSize = 0;
 
     mBizMode = BIZ_MODE_UNKNOWN;
-    mBizStatus = BIZ_STATUS_INACTIVE;
+    mBizStatus = BIZ_STATUS_UNKNOWN;
     mNodeCounters = NodeCounterMap();
 }
 
@@ -2743,12 +2743,16 @@ void MegaClient::exec()
     {
         sum += nc.second;
     }
-    LOG_warn << "storage sum : " << sum.storage << " mismatch wtih fingerprint size sum: " << mFingerprints.getSumSizes();
 #endif
 
 #ifdef MEGA_MEASURE_CODE
     LOG_warn << "Active transfers: " << tslots.size() << performanceStats.execFunction.report() << performanceStats.transferslotDoio.report() << performanceStats.curlDoio.report() << performanceStats.execdirectreads.report() << performanceStats.transferComplete.report();
     LOG_warn << "cs batches: " << reqs.csBatchesSent << " " << reqs.csBatchesReceived << " cs requests: " << reqs.csRequestsSent << " " << reqs.csRequestsCompleted << " cs time:" << performanceStats.csRequestWaitTime.report() << " transfers " << performanceStats.transferStarts << " " << performanceStats.transferFinishes;
+#endif
+    if (sum.storage != mFingerprints.getSumSizes())
+    {
+        LOG_warn << "storage sum : " << sum.storage << " mismatch wtih fingerprint size sum: " << mFingerprints.getSumSizes();
+    }
 #endif
 }
 
@@ -4095,10 +4099,12 @@ bool MegaClient::procsc()
 #endif
 
                                 // node addition
-                                useralerts.beginNotingSharedNodes();
-                                sc_newnodes();
-                                mergenewshares(1);
-                                useralerts.convertNotedSharedNodes(true);
+                                {
+                                    useralerts.beginNotingSharedNodes();
+                                    handle originatingUser = sc_newnodes();
+                                    mergenewshares(1);
+                                    useralerts.convertNotedSharedNodes(true, originatingUser);
+                                }
 
 #ifdef ENABLE_SYNC
                                 if (!fetchingnodes)
@@ -4878,8 +4884,9 @@ void MegaClient::readtree(JSON* j)
 }
 
 // server-client newnodes processing
-void MegaClient::sc_newnodes()
+handle MegaClient::sc_newnodes()
 {
+    handle originatingUser = UNDEF;
     for (;;)
     {
         switch (jsonsc.getnameid())
@@ -4892,13 +4899,17 @@ void MegaClient::sc_newnodes()
                 readusers(&jsonsc, true);
                 break;
 
+            case MAKENAMEID2('o', 'u'):
+                originatingUser = jsonsc.gethandle(USERHANDLE);
+                break;
+
             case EOO:
-                return;
+                return originatingUser;
 
             default:
                 if (!jsonsc.storeobject())
                 {
-                    return;
+                    return originatingUser;
                 }
         }
     }
@@ -6533,6 +6544,7 @@ Node* MegaClient::nodebyhandle(handle h)
 Node* MegaClient::sc_deltree()
 {
     Node* n = NULL;
+    handle originatingUser = UNDEF;
 
     for (;;)
     {
@@ -6547,6 +6559,10 @@ Node* MegaClient::sc_deltree()
                 }
                 break;
 
+            case MAKENAMEID2('o', 'u'):
+                originatingUser = jsonsc.gethandle(USERHANDLE);
+                break;
+
             case EOO:
                 if (n)
                 {
@@ -6558,7 +6574,7 @@ Node* MegaClient::sc_deltree()
                     proctree(n, &td);
                     reqtag = creqtag;
                     
-                    useralerts.convertNotedSharedNodes(false);
+                    useralerts.convertNotedSharedNodes(false, originatingUser);
                 }
                 return n;
 
@@ -11455,6 +11471,18 @@ error MegaClient::addsync(string* rootpath, const char* debris, string* localdeb
 
             Sync* sync = new Sync(this, rootpath, debris, localdebris, remotenode, fsfp, inshare, tag, appData);
             sync->isnetwork = isnetwork;
+
+            if (!sync->fsstableids)
+            {
+                if (sync->assignfsids())
+                {
+                    LOG_info << "Successfully assigned fs IDs for filesystem with unstable IDs";
+                }
+                else
+                {
+                    LOG_warn << "Failed to assign some fs IDs for filesystem with unstable IDs";
+                }
+            }
 
             if (sync->scan(rootpath, fa))
             {
