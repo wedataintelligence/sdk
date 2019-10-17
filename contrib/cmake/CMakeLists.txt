@@ -648,6 +648,7 @@ target_link_libraries(megacli Mega)
 if (NOT NO_READLINE)
     target_link_libraries(megacli readline)
 endif (NOT NO_READLINE)
+set_target_properties(megacli PROPERTIES LINK_FLAGS "/DEBUG" )
 
 add_executable(megasimplesync ${MegaDir}/examples/megasimplesync.cpp)
 target_link_libraries(megasimplesync Mega )

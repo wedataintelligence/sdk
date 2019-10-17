@@ -22,6 +22,7 @@
 #include "mega.h"
 #include "megacli.h"
 #include <fstream>
+#include <chrono>
 
 #define USE_VARARGS
 #define PREFER_STDARG
@@ -2543,6 +2544,8 @@ void printAuthringInformation(handle userhandle)
     }
 }
 
+void exec_testencrypt(autocomplete::ACState& s);
+
 autocomplete::ACN autocompleteSyntax()
 {
     using namespace autocomplete;
@@ -2634,7 +2637,7 @@ autocomplete::ACN autocompleteSyntax()
     p->Add(exec_codepage, sequence(text("codepage"), opt(sequence(wholenumber(65001), opt(wholenumber(65001))))));
     p->Add(exec_log, sequence(text("log"), either(text("utf8"), text("utf16"), text("codepage")), localFSFile()));
 #endif
-    p->Add(exec_test, sequence(text("test")));
+    p->Add(exec_testencrypt, sequence(text("testencrypt"), param("MB"), param("iterations")));
 #ifdef ENABLE_CHAT
     p->Add(exec_chats, sequence(text("chats")));
     p->Add(exec_chatc, sequence(text("chatc"), param("group"), repeat(opt(sequence(contactEmail(client), either(text("ro"), text("sta"), text("mod")))))));
@@ -3854,8 +3857,35 @@ void exec_lpwd(autocomplete::ACState& s)
 #endif
 
 
-void exec_test(autocomplete::ACState& s)
+void exec_testencrypt(autocomplete::ACState& s)
 {
+    using namespace std::chrono;
+    uint64_t mb = unsigned(atoi(s.words[1].s.c_str()));
+    uint64_t iterations = unsigned(atoi(s.words[2].s.c_str()));
+
+    byte key[16] = { 0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01 };
+    SymmCipher sc;
+    sc.setkey(key);
+
+    uint64_t datasize = mb * 1024 * 1024;
+    std::unique_ptr<byte[]> data(new byte[(unsigned)datasize]);
+
+    SymmCipher::ctr_iv iv;
+    memset(&iv, 0, sizeof(iv));
+
+    byte mac[SymmCipher::BLOCKSIZE] = { 0 };
+
+    for (uint64_t i = iterations; i--; )
+    {
+        auto t0 = high_resolution_clock::now();
+
+        sc.ctr_crypt(data.get(), datasize, 0, iv, mac, true, false);
+
+        auto t1 = high_resolution_clock::now();
+        auto ms = duration_cast<milliseconds>(t1 - t0).count();
+        cout << "encrypted " << mb << "MB in " << ms << "ms (" << (mb * 1000.0 / ms) << "MB per second)" << endl;
+    }
+
 }
 
 void exec_mfad(autocomplete::ACState& s)
