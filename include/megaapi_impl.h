@@ -1798,6 +1798,7 @@ struct MegaFileGet : public MegaFile
     static MegaFileGet* unserialize(string*);
 
 private:
+    bool mHidFile = false;
     MegaFileGet() {}
 };
 

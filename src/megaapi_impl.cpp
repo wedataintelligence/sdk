@@ -4834,13 +4834,14 @@ void MegaFileGet::updatelocalname()
 void MegaFileGet::progress()
 {
 #ifdef _WIN32
-    if(transfer->slot && !transfer->slot->progressreported)
+    if(transfer->state() == TRANSFERSTATE_ACTIVE && !mHidFile)
     {
         transfer->localfilename.append("", 1);
         WIN32_FILE_ATTRIBUTE_DATA fad;
         if (GetFileAttributesExW((LPCWSTR)transfer->localfilename.data(), GetFileExInfoStandard, &fad))
             SetFileAttributesW((LPCWSTR)transfer->localfilename.data(), fad.dwFileAttributes | FILE_ATTRIBUTE_HIDDEN);
         transfer->localfilename.resize(transfer->localfilename.size()-1);
+        mHidFile = true;
     }
 #endif
 }
@@ -11606,7 +11607,7 @@ void MegaApiImpl::file_added(File *f)
 
     currentTransfer = NULL;
     transfer->setTransfer(t);
-    transfer->setState(t->state);
+    transfer->setState(t->state());
     transfer->setPriority(t->priority);
     transfer->setTotalBytes(t->size);
     transfer->setTransferredBytes(t->progresscompleted);
@@ -11684,11 +11685,9 @@ void MegaApiImpl::transfer_update(Transfer *t)
 
         if (it == t->files.begin()
                 && transfer->getUpdateTime() == Waiter::ds
-                && transfer->getState() == t->state
+                && transfer->getState() == t->state()
                 && transfer->getPriority() == t->priority
-                && (!t->slot
-                    || (t->slot->progressreported
-                        && t->slot->progressreported != t->size)))
+                && !t->startOrEndProgress())
         {
             // don't send more than one callback per decisecond
             // if the state doesn't change, the priority doesn't change
@@ -16099,7 +16098,7 @@ void MegaApiImpl::fireOnChatsUpdate(MegaTextChatList *chats)
 void MegaApiImpl::processTransferPrepare(Transfer *t, MegaTransferPrivate *transfer)
 {
     transfer->setTotalBytes(t->size);
-    transfer->setState(t->state);
+    transfer->setState(t->state());
     transfer->setPriority(t->priority);
     LOG_info << "Transfer (" << transfer->getTransferString() << ") starting. File: " << transfer->getFileName();
 }
@@ -16107,15 +16106,15 @@ void MegaApiImpl::processTransferPrepare(Transfer *t, MegaTransferPrivate *trans
 void MegaApiImpl::processTransferUpdate(Transfer *tr, MegaTransferPrivate *transfer)
 {
     dstime currentTime = Waiter::ds;
-    if (tr->slot)
+    if (tr->slot())
     {
         m_off_t prevTransferredBytes = transfer->getTransferredBytes();
-        m_off_t deltaSize = tr->slot->progressreported - prevTransferredBytes;
+        m_off_t deltaSize = tr->slot()->progressreported - prevTransferredBytes;
         transfer->setStartTime(currentTime);
-        transfer->setTransferredBytes(tr->slot->progressreported);
+        transfer->setTransferredBytes(tr->slot()->progressreported);
         transfer->setDeltaSize(deltaSize);
-        transfer->setSpeed(tr->slot->speed);
-        transfer->setMeanSpeed(tr->slot->meanSpeed);
+        transfer->setSpeed(tr->slot()->speed);
+        transfer->setMeanSpeed(tr->slot()->meanSpeed);
 
         if (tr->type == GET)
         {
@@ -16133,7 +16132,7 @@ void MegaApiImpl::processTransferUpdate(Transfer *tr, MegaTransferPrivate *trans
         transfer->setMeanSpeed(0);
     }
 
-    transfer->setState(tr->state);
+    transfer->setState(tr->state());
     transfer->setPriority(tr->priority);
     transfer->setUpdateTime(currentTime);
     fireOnTransferUpdate(transfer);
@@ -16148,8 +16147,8 @@ void MegaApiImpl::processTransferComplete(Transfer *tr, MegaTransferPrivate *tra
     transfer->setTransferredBytes(tr->size);
     transfer->setPriority(tr->priority);
     transfer->setDeltaSize(deltaSize);
-    transfer->setSpeed(tr->slot ? tr->slot->speed : 0);
-    transfer->setMeanSpeed(tr->slot ? tr->slot->meanSpeed : 0);
+    transfer->setSpeed(tr->slot() ? tr->slot()->speed : 0);
+    transfer->setMeanSpeed(tr->slot() ? tr->slot()->meanSpeed : 0);
 
     if (tr->type == GET)
     {
@@ -20657,12 +20656,12 @@ void MegaApiImpl::sendPendingRequests()
                 client->usehttps = usehttps;
                 for (int d = GET; d == GET || d == PUT; d += PUT - GET)
                 {
+                    DBTableTransactionCommitter committer(client->tctable);
                     for (transfer_map::iterator it = client->transfers[d].begin(); it != client->transfers[d].end(); it++)
                     {
                         Transfer *t = it->second;
-                        if (t->slot)
+                        if (t->state() == TRANSFERSTATE_ACTIVE)
                         {
-                            DBTableTransactionCommitter committer(client->tctable);
                             t->failed(API_EAGAIN, committer);
                         }
                     }

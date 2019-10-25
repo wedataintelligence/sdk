@@ -402,9 +402,18 @@ typedef map<const string*, Node*, StringCmp> remotenode_map;
 
 typedef enum { TREESTATE_NONE = 0, TREESTATE_SYNCED, TREESTATE_PENDING, TREESTATE_SYNCING } treestate_t;
 
-typedef enum { TRANSFERSTATE_NONE = 0, TRANSFERSTATE_QUEUED, TRANSFERSTATE_ACTIVE, TRANSFERSTATE_PAUSED,
-               TRANSFERSTATE_RETRYING, TRANSFERSTATE_COMPLETING, TRANSFERSTATE_COMPLETED,
-               TRANSFERSTATE_CANCELLED, TRANSFERSTATE_FAILED } transferstate_t;
+// This enum gets serialized with transfers, so the values must not be changed.
+typedef enum { TRANSFERSTATE_NONE = 0,     // Transfer object created but not yet queued
+               TRANSFERSTATE_QUEUED,       // SDK has the transfer in its queue but it's not being worked on yet
+               TRANSFERSTATE_ACTIVE,       // Transferslot has been created and is working on the transfer
+               TRANSFERSTATE_PAUSED,       // User has requested this transfer not proceed.  TransferSlot does not exist, and transfer will not start/continue
+               TRANSFERSTATE_RETRYING,     // Transferslot exists but is not currently working, we are waiting for the backoff timer.
+               TRANSFERSTATE_COMPLETING,   // Completion is initiated, file copies to complete it are in progress.
+               TRANSFERSTATE_COMPLETED,    // The transfer is fully complete, transfer object will be deleted momentairly (after app callbacks)
+               TRANSFERSTATE_CANCELLED,    // User requested this transfer be cancelled.  After app callbacks, this transfer will be deleted momentarily
+               TRANSFERSTATE_FAILED,       // The transfer has failed, transfer object will be deleted momentarily (after app callbacks)
+               TRANSFERSTATE_COMPLETING_FA // NEW: The upload is complete, but its file attribute puts have not completed yet.  We are waiting for that before the final putnodes.
+} transferstate_t;
 
 struct Notification
 {

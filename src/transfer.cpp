@@ -34,6 +34,8 @@ namespace mega {
 
 Transfer::Transfer(MegaClient* cclient, direction_t ctype)
     : bt(cclient->rng)
+    , mState(TRANSFERSTATE_NONE)
+
 {
     type = ctype;
     client = cclient;
@@ -45,8 +47,6 @@ Transfer::Transfer(MegaClient* cclient, direction_t ctype)
     ctriv = 0;
     metamac = 0;
     tag = 0;
-    slot = NULL;
-    asyncopencontext = NULL;
     progresscompleted = 0;
     hasprevmetamac = false;
     hascurrentmetamac = false;
@@ -55,7 +55,6 @@ Transfer::Transfer(MegaClient* cclient, direction_t ctype)
     ultoken = NULL;
 
     priority = 0;
-    state = TRANSFERSTATE_NONE;
 
     skipserialization = false;
 
@@ -88,17 +87,7 @@ Transfer::~Transfer()
     }
     client->transferlist.removetransfer(this);
 
-    if (slot)
-    {
-        delete slot;
-    }
-
-    if (asyncopencontext)
-    {
-        delete asyncopencontext;
-        asyncopencontext = NULL;
-        client->asyncfopens--;
-    }
+    mSlot.reset();
 
     if (ultoken)
     {
@@ -170,7 +159,7 @@ bool Transfer::serialize(string *d)
     d->append((char*)&ll, sizeof(ll));
     d->append(combinedUrls.data(), ll);
 
-    char s = static_cast<char>(state);
+    char s = static_cast<char>(mState);
     d->append((const char*)&s, sizeof(s));
     d->append((const char*)&priority, sizeof(priority));
     d->append("", 1);
@@ -312,7 +301,7 @@ Transfer *Transfer::unserialize(MegaClient *client, string *d, transfer_map* tra
     if (state == TRANSFERSTATE_PAUSED)
     {
         LOG_debug << "Unserializing paused transfer";
-        t->state = TRANSFERSTATE_PAUSED;
+        t->mState = TRANSFERSTATE_PAUSED;
     }
 
     t->priority =  MemAccess::get<uint64_t>(ptr);
@@ -346,7 +335,7 @@ void Transfer::failed(error e, DBTableTransactionCommitter& committer, dstime ti
 
     LOG_debug << "Transfer failed with error " << e;
 
-    if (slot && slot->delayedchunk)
+    if (mSlot && mSlot->delayedchunk)
     {
         int creqtag = client->reqtag;
         client->reqtag = 0;
@@ -358,7 +347,7 @@ void Transfer::failed(error e, DBTableTransactionCommitter& committer, dstime ti
     {
         if (e == API_EOVERQUOTA)
         {
-            if (!slot)
+            if (!mSlot)
             {
                 client->activateoverquota(timeleft);
                 bt.backoff(timeleft ? timeleft : NEVER);
@@ -394,8 +383,7 @@ void Transfer::failed(error e, DBTableTransactionCommitter& committer, dstime ti
         else
         {
             bt.backoff();
-            state = TRANSFERSTATE_RETRYING;
-            client->app->transfer_failed(this, e, timeleft);
+            setState(TRANSFERSTATE_RETRYING, 0, nullptr, true, e);
             client->looprequested = true;
             ++client->performanceStats.transferTempErrors;
         }
@@ -441,10 +429,10 @@ void Transfer::failed(error e, DBTableTransactionCommitter& committer, dstime ti
         ultoken = NULL;
         pos = 0;
 
-        if (slot && slot->fa && (slot->fa->mtime != mtime || slot->fa->size != size))
+        if (mSlot && mSlot->fa && (mSlot->fa->mtime != mtime || mSlot->fa->size != size))
         {
             LOG_warn << "Modification detected during active upload. Size: " << size << "  Mtime: " << mtime
-                     << "    FaSize: " << slot->fa->size << "  FaMtime: " << slot->fa->mtime;
+                     << "    FaSize: " << mSlot->fa->size << "  FaMtime: " << mSlot->fa->mtime;
             defer = false;
         }
     }
@@ -452,29 +440,14 @@ void Transfer::failed(error e, DBTableTransactionCommitter& committer, dstime ti
     if (defer)
     {        
         failcount++;
-        delete slot;
-        slot = NULL;
-        client->transfercacheadd(this, &committer);
-
+        setState(TRANSFERSTATE_RETRYING, 0, &committer, false, e);
         LOG_debug << "Deferring transfer " << failcount << " during " << (bt.retryin() * 100) << " ms";
     }
     else
     {
         LOG_debug << "Removing transfer";
-        state = TRANSFERSTATE_FAILED;
         finished = true;
-
-        for (file_list::iterator it = files.begin(); it != files.end(); it++)
-        {
-#ifdef ENABLE_SYNC
-            if((*it)->syncxfer && e != API_EBUSINESSPASTDUE)
-            {
-                client->syncdownrequired = true;
-            }
-#endif
-            client->app->file_removed(*it, e);
-        }
-        client->app->transfer_removed(this);
+        setState(TRANSFERSTATE_FAILED, 0, nullptr, true, e);
         ++client->performanceStats.transferFails;
         delete this;
     }
@@ -530,8 +503,7 @@ void Transfer::complete(DBTableTransactionCommitter& committer)
 {
     CodeCounter::ScopeTimer ccst(client->performanceStats.transferComplete);
 
-    state = TRANSFERSTATE_COMPLETING;
-    client->app->transfer_update(this);
+    setState(TRANSFERSTATE_COMPLETING, 0, nullptr, true, API_OK);
 
     if (type == GET)
     {
@@ -543,7 +515,7 @@ void Transfer::complete(DBTableTransactionCommitter& committer)
         bool success;
 
         // disconnect temp file from slot...
-        slot->fa.reset();
+        mSlot->fa.reset();
 
         // FIXME: multiple overwrite race conditions below (make copies
         // from open file instead of closing/reopening!)
@@ -907,33 +879,32 @@ void Transfer::complete(DBTableTransactionCommitter& committer)
 
         if (!files.size())
         {
-            state = TRANSFERSTATE_COMPLETED;
             localfilename = localname;
             finished = true;
             client->looprequested = true;
-            client->app->transfer_complete(this);
+            setState(TRANSFERSTATE_COMPLETED, 0, nullptr, true, API_OK);
             localfilename.clear();
             delete this;
         }
         else
         {
             // some files are still pending completion, close fa and set retry timer
-            slot->fa.reset();
+            mSlot->fa.reset();
 
             LOG_debug << "Files pending completion: " << files.size() << ". Waiting for a retry.";
             LOG_debug << "First pending file: " << files.front()->name;
 
-            slot->retrying = true;
-            slot->retrybt.backoff(11);
+            mSlot->retrying = true;
+            mSlot->retrybt.backoff(11);
         }
     }
     else
     {
         LOG_debug << "Upload complete: " << (files.size() ? files.front()->name : "NO_FILES") << " " << files.size();
 
-        if (slot->fa)
+        if (mSlot->fa)
         {
-            if (slot->delayedchunk)
+            if (mSlot->delayedchunk)
             {
                 int creqtag = client->reqtag;
                 client->reqtag = 0;
@@ -941,7 +912,7 @@ void Transfer::complete(DBTableTransactionCommitter& committer)
                 client->reqtag = creqtag;
             }
 
-            slot->fa.reset();
+            mSlot->fa.reset();
         }
 
         // files must not change during a PUT transfer
@@ -972,8 +943,8 @@ void Transfer::complete(DBTableTransactionCommitter& committer)
                 if (client->fsaccess->transient_error)
                 {
                     LOG_warn << "Retrying upload completion due to a transient error";
-                    slot->retrying = true;
-                    slot->retrybt.backoff(11);
+                    mSlot->retrying = true;
+                    mSlot->retrybt.backoff(11);
                     return;
                 }
             }
@@ -1069,6 +1040,120 @@ m_off_t Transfer::nextpos()
 
     return pos;
 }
+
+bool Transfer::startOrEndProgress()
+{
+    // working but right at the start or right at the end
+    return mSlot && (!mSlot->progressreported || mSlot->progressreported == size);
+}
+
+void Transfer::updatelocalname()
+{
+    if (mSlot && mSlot->fa && mSlot->fa->nonblocking_localname.size())
+    {
+        mSlot->fa->updatelocalname(&localfilename);
+    }
+}
+
+void Transfer::setState(transferstate_t newstate, dstime timeleft, DBTableTransactionCommitter* committer, bool updateapp, error appReason)
+{
+    switch (newstate)
+    {
+
+    case TRANSFERSTATE_QUEUED:
+        mSlot.reset();
+        mState = TRANSFERSTATE_QUEUED;
+        if (client->ststatus != STORAGE_RED || type == GET)
+        {
+            bt.arm();
+        }
+
+        // these two - just sometimes?
+        if (committer) client->transfercacheadd(this, committer);
+        if (updateapp) client->app->transfer_update(this);
+
+        break;
+
+    case TRANSFERSTATE_ACTIVE:
+        mSlot.reset(new TransferSlot(this));
+        mState = TRANSFERSTATE_ACTIVE;
+        break;
+
+    case TRANSFERSTATE_PAUSED:
+        if (mSlot)
+        {
+            if (client->ststatus != STORAGE_RED || type == GET)
+            {
+                bt.arm();
+            }
+            mSlot.reset();
+        }
+        mState = TRANSFERSTATE_PAUSED;
+        if (committer) client->transfercacheadd(this, committer);
+        client->app->transfer_update(this);
+        break;
+
+    case TRANSFERSTATE_RETRYING:
+        mSlot.reset();  // todo: can we really switch to always no slot for retrying?
+        mState = TRANSFERSTATE_RETRYING;
+
+        bt.backoff(timeleft ? timeleft : NEVER);
+
+        if (mSlot)  // todo: if we keep mSlot sometimes, we may need this
+        {
+            mSlot->retrybt.backoff(timeleft ? timeleft : NEVER);
+            mSlot->retrying = true;
+        }
+
+        if (updateapp) client->app->transfer_failed(this, appReason, timeleft);
+        ++client->performanceStats.transferTempErrors;
+        break;
+
+    case TRANSFERSTATE_CANCELLED:
+        if (mSlot && mSlot->delayedchunk)
+        {
+            client->sendevent(99444, "Upload with delayed chunks cancelled", 0);
+        }
+
+        mState = TRANSFERSTATE_CANCELLED;
+        if (updateapp) client->app->transfer_removed(this);
+        break;
+
+    case TRANSFERSTATE_FAILED:
+        mState = TRANSFERSTATE_FAILED;  
+        // leave mSlot for now in case it's needed in callbacks.  The whole object will be deleted momentarily
+        for (file_list::iterator it = files.begin(); it != files.end(); it++)
+        {
+#ifdef ENABLE_SYNC
+            if ((*it)->syncxfer && appReason != API_EBUSINESSPASTDUE)
+            {
+                client->syncdownrequired = true;
+            }
+#endif
+            if (updateapp) client->app->file_removed(*it, appReason);
+        }
+        if (updateapp) client->app->transfer_removed(this);
+        break;
+
+    case TRANSFERSTATE_COMPLETING:
+        mState = TRANSFERSTATE_COMPLETING;
+        if (updateapp) client->app->transfer_update(this);
+        break;
+
+    case TRANSFERSTATE_COMPLETED:
+        mState = TRANSFERSTATE_COMPLETED;
+        this->completefiles();
+        if (updateapp) client->app->transfer_complete(this);
+        client->looprequested = true;
+        break;
+
+    case TRANSFERSTATE_COMPLETING_FA:                // this was not an explicit state before, we used to just remove it from the list (without notifying the client app)
+        mState = TRANSFERSTATE_COMPLETING_FA;
+        mSlot.reset();
+        break;
+    }
+}
+
 
 DirectReadNode::DirectReadNode(MegaClient* cclient, handle ch, bool cp, SymmCipher* csymmcipher, int64_t cctriv, const char *privauth, const char *pubauth, const char *cauth)
 {
@@ -1589,9 +1674,9 @@ TransferList::TransferList()
 
 void TransferList::addtransfer(Transfer *transfer, DBTableTransactionCommitter& committer, bool startFirst)
 {
-    if (transfer->state != TRANSFERSTATE_PAUSED)
+    if (transfer->state() != TRANSFERSTATE_PAUSED)
     {
-        transfer->state = TRANSFERSTATE_QUEUED;
+        transfer->setState(TRANSFERSTATE_QUEUED, 0, nullptr, false, API_OK);
     }
 
     if (!transfer->priority)
@@ -1838,38 +1923,25 @@ error TransferList::pause(Transfer *transfer, bool enable, DBTableTransactionCom
         return API_ENOENT;
     }
 
-    if ((enable && transfer->state == TRANSFERSTATE_PAUSED) ||
-            (!enable && transfer->state != TRANSFERSTATE_PAUSED))
+    if ((enable && transfer->state() == TRANSFERSTATE_PAUSED) ||
+            (!enable && transfer->state() != TRANSFERSTATE_PAUSED))
     {
         return API_OK;
     }
 
     if (!enable)
     {
-        transfer_list::iterator it = iterator(transfer);
-        transfer->state = TRANSFERSTATE_QUEUED;
-        prepareIncreasePriority(transfer, it, it, committer);
-        client->transfercacheadd(transfer, &committer);
-        client->app->transfer_update(transfer);
+        //transfer_list::iterator it = iterator(transfer);
+        //no right? this would stop the last active transfer in the list: prepareIncreasePriority(transfer, it, it, committer);
+        transfer->setState(TRANSFERSTATE_QUEUED, 0, &committer, true, API_OK);
         return API_OK;
     }
 
-    if (transfer->state == TRANSFERSTATE_ACTIVE
-            || transfer->state == TRANSFERSTATE_QUEUED
-            || transfer->state == TRANSFERSTATE_RETRYING)
+    if (transfer->state() == TRANSFERSTATE_ACTIVE
+            || transfer->state() == TRANSFERSTATE_QUEUED
+            || transfer->state() == TRANSFERSTATE_RETRYING)
     {
-        if (transfer->slot)
-        {
-            if (transfer->client->ststatus != STORAGE_RED || transfer->type == GET)
-            {
-                transfer->bt.arm();
-            }
-            delete transfer->slot;  
-            transfer->slot = NULL;
-        }
-        transfer->state = TRANSFERSTATE_PAUSED;
-        client->transfercacheadd(transfer, &committer);
-        client->app->transfer_update(transfer);
+        transfer->setState(TRANSFERSTATE_PAUSED, 0, nullptr, false, API_OK);
         return API_OK;
     }
 
@@ -1908,9 +1980,7 @@ Transfer *TransferList::nexttransfer(direction_t direction)
     for (transfer_list::iterator it = transfers[direction].begin(); it != transfers[direction].end(); it++)
     {
         Transfer *transfer = (*it);
-        if ((!transfer->slot && isReady(transfer))
-                || (transfer->asyncopencontext
-                    && transfer->asyncopencontext->finished))
+        if (isReady(transfer))
         {
             return transfer;
         }
@@ -1934,14 +2004,14 @@ void TransferList::prepareIncreasePriority(Transfer *transfer, transfer_list::it
         return;
     }
 
-    if (!transfer->slot && transfer->state != TRANSFERSTATE_PAUSED)
+    if (transfer->state() != TRANSFERSTATE_ACTIVE && transfer->state() != TRANSFERSTATE_PAUSED)
     {
         Transfer *lastActiveTransfer = NULL;
         for (transferslot_list::iterator it = client->tslots.begin(); it != client->tslots.end(); it++)
         {
             Transfer *t = (*it)->transfer;
-            if (t && t->type == transfer->type && t->slot
-                    && t->state == TRANSFERSTATE_ACTIVE
+            if (t && t->type == transfer->type
+                    && t->state() == TRANSFERSTATE_ACTIVE
                     && t->priority > transfer->priority
                     && (!lastActiveTransfer || t->priority > lastActiveTransfer->priority))
             {
@@ -1951,35 +2021,21 @@ void TransferList::prepareIncreasePriority(Transfer *transfer, transfer_list::it
 
         if (lastActiveTransfer)
         {
-            if (lastActiveTransfer->client->ststatus != STORAGE_RED || lastActiveTransfer->type == GET)
-            {
-                lastActiveTransfer->bt.arm();
-            }
-            delete lastActiveTransfer->slot; 
-            lastActiveTransfer->slot = NULL;
-            lastActiveTransfer->state = TRANSFERSTATE_QUEUED;
-            client->transfercacheadd(lastActiveTransfer, &committer);
-            client->app->transfer_update(lastActiveTransfer);
+            lastActiveTransfer->setState(TRANSFERSTATE_QUEUED, 0, nullptr, false, API_OK);
         }
     }
 }
 
 void TransferList::prepareDecreasePriority(Transfer *transfer, transfer_list::iterator it, transfer_list::iterator dstit)
 {
-    if (transfer->slot && transfer->state == TRANSFERSTATE_ACTIVE)
+    if (transfer->state() == TRANSFERSTATE_ACTIVE)
     {
         transfer_list::iterator cit = it + 1;
         while (cit != transfers[transfer->type].end())
         {
-            if (!(*cit)->slot && isReady(*cit))
+            if (isReady(*cit))
             {
-                if (transfer->client->ststatus != STORAGE_RED || transfer->type == GET)
-                {
-                    transfer->bt.arm();
-                }
-                delete transfer->slot; 
-                transfer->slot = NULL;
-                transfer->state = TRANSFERSTATE_QUEUED;
+                transfer->setState(TRANSFERSTATE_QUEUED, 0, nullptr, false, API_OK);
                 break;
             }
 
@@ -1995,7 +2051,7 @@ void TransferList::prepareDecreasePriority(Transfer *transfer, transfer_list::it
 
 bool TransferList::isReady(Transfer *transfer)
 {
-    return ((transfer->state == TRANSFERSTATE_QUEUED || transfer->state == TRANSFERSTATE_RETRYING)
+    return ((transfer->state() == TRANSFERSTATE_QUEUED || transfer->state() == TRANSFERSTATE_RETRYING)
             && transfer->bt.armed());
 }
 

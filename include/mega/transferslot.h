@@ -34,6 +34,13 @@ class DBTableTransactionCommitter;
 // active transfer
 struct MEGA_API TransferSlot
 {
+    // context of the async fopen operation
+    unique_ptr<AsyncIOContext> asyncopencontext;
+    bool openfinished = false;
+
+
+    bool initialFileOpen(MegaClient* client, DBTableTransactionCommitter& committer);
+
     // link to related transfer (never NULL)
     struct Transfer* transfer;
 

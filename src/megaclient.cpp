@@ -902,6 +902,8 @@ void MegaClient::acknowledgeuseralerts()
 
 void MegaClient::activateoverquota(dstime timeleft)
 {
+    DBTableTransactionCommitter committer(tctable);
+
     if (timeleft)
     {
         LOG_warn << "Bandwidth overquota";
@@ -911,17 +913,7 @@ void MegaClient::activateoverquota(dstime timeleft)
             for (transfer_map::iterator it = transfers[d].begin(); it != transfers[d].end(); it++)
             {
                 Transfer *t = it->second;
-                t->bt.backoff(timeleft);
-                if (t->slot && (t->state != TRANSFERSTATE_RETRYING
-                                || !t->slot->retrying
-                                || t->slot->retrybt.nextset() != overquotauntil))
-                {
-                    t->state = TRANSFERSTATE_RETRYING;
-                    t->slot->retrybt.backoff(timeleft);
-                    t->slot->retrying = true;
-                    app->transfer_failed(t, API_EOVERQUOTA, timeleft);
-                    ++performanceStats.transferTempErrors;
-                }
+                t->setState(TRANSFERSTATE_RETRYING, timeleft, nullptr, true, API_OK);
             }
         }
     }
@@ -931,15 +923,7 @@ void MegaClient::activateoverquota(dstime timeleft)
         for (transfer_map::iterator it = transfers[PUT].begin(); it != transfers[PUT].end(); it++)
         {
             Transfer *t = it->second;
-            t->bt.backoff(NEVER);
-            if (t->slot)
-            {
-                t->state = TRANSFERSTATE_RETRYING;
-                t->slot->retrybt.backoff(NEVER);
-                t->slot->retrying = true;
-                app->transfer_failed(t, API_EOVERQUOTA, 0);
-                ++performanceStats.transferTempErrors;
-            }
+            t->setState(TRANSFERSTATE_RETRYING, timeleft, nullptr, true, API_OK);
         }
     }
     looprequested = true;
@@ -3132,19 +3116,16 @@ bool MegaClient::abortbackoff(bool includexfers)
         int end = (ststatus != STORAGE_RED) ? PUT : GET;
         for (int d = GET; d <= end; d += PUT - GET)
         {
-            for (transfer_map::iterator it = transfers[d].begin(); it != transfers[d].end(); it++)
+            for (auto& it : transfers[d])
             {
-                if (it->second->bt.arm())
-                {
-                    r = true;
-                }
+                r = r || it.second->bt.arm();
+            }
 
-                if (it->second->slot && it->second->slot->retrying)
+            for (auto& it : tslots)
+            {
+                if (it->retrying)
                 {
-                    if (it->second->slot->retrybt.arm())
-                    {
-                        r = true;
-                    }
+                    r = r || it->retrybt.arm();
                 }
             }
         }
@@ -3220,19 +3201,8 @@ bool MegaClient::dispatch(direction_t d)
 
     DBTableTransactionCommitter committer(tctable);
 
-    Transfer *nexttransfer;
-    TransferSlot *ts = NULL;
-
-    for (;;)
+    while (Transfer *nexttransfer = transferlist.nexttransfer(d))
     {
-        nexttransfer = transferlist.nexttransfer(d);
-
-        // no inactive transfers ready?
-        if (!nexttransfer)
-        {
-            return false;
-        }
-
         if (!nexttransfer->localfilename.size())
         {
             // this is a fresh transfer rather than the resumption of a partly
@@ -3300,194 +3270,12 @@ bool MegaClient::dispatch(direction_t d)
             app->transfer_prepare(nexttransfer);
         }
 
-        bool openok = false;
-        bool openfinished = false;
-
         // verify that a local path was given and start/resume transfer
         if (nexttransfer->localfilename.size())
         {
-            if (!nexttransfer->slot)
-            {
-                // allocate transfer slot
-                ts = new TransferSlot(nexttransfer);
-            }
-            else
-            {
-                ts = nexttransfer->slot;
-            }
+            nexttransfer->setState(TRANSFERSTATE_ACTIVE, 0, nullptr, false, API_OK);
+            return true;
 
-            if (ts->fa->asyncavailable())
-            {
-                if (!nexttransfer->asyncopencontext)
-                {
-                    LOG_debug << "Starting async open";
-
-                    // try to open file (PUT transfers: open in nonblocking mode)
-                    nexttransfer->asyncopencontext = (d == PUT)
-                        ? ts->fa->asyncfopen(&nexttransfer->localfilename)
-                        : ts->fa->asyncfopen(&nexttransfer->localfilename, false, true, nexttransfer->size);
-                    asyncfopens++;
-                }
-
-                if (nexttransfer->asyncopencontext->finished)
-                {
-                    LOG_debug << "Async open finished";
-                    openok = !nexttransfer->asyncopencontext->failed;
-                    openfinished = true;
-                    delete nexttransfer->asyncopencontext;
-                    nexttransfer->asyncopencontext = NULL;
-                    asyncfopens--;
-                }
-
-                assert(!asyncfopens);
-                //FIXME: Improve the management of asynchronous fopen when they can
-                //be really asynchronous. All transfers could open its file in this
-                //stage (not good) and, if we limit it, the transfer queue could hang because
-                //it's full of transfers in that state. Transfer moves also complicates
-                //the management because transfers that haven't been opened could be
-                //placed over transfers that are already being opened.
-                //Probably, the best approach is to add the slot of these transfers to
-                //the queue and ensure that all operations (transfer moves, pauses)
-                //are correctly cancelled when needed
-            }
-            else
-            {
-                // try to open file (PUT transfers: open in nonblocking mode)
-                openok = (d == PUT)
-                        ? ts->fa->fopen(&nexttransfer->localfilename)
-                        : ts->fa->fopen(&nexttransfer->localfilename, false, true);
-                openfinished = true;
-            }
-
-            if (openfinished && openok)
-            {
-                handle h = UNDEF;
-                bool hprivate = true;
-                const char *privauth = NULL;
-                const char *pubauth = NULL;
-                const char *chatauth = NULL;
-
-                nexttransfer->pos = 0;
-                nexttransfer->progresscompleted = 0;
-
-                if (d == GET || nexttransfer->tempurls.size())
-                {
-                    m_off_t p = 0;
-
-                    // resume at the end of the last contiguous completed block
-                    nexttransfer->chunkmacs.calcprogress(nexttransfer->size, nexttransfer->pos, nexttransfer->progresscompleted, &p);
-
-                    if (nexttransfer->progresscompleted > nexttransfer->size)
-                    {
-                        LOG_err << "Invalid transfer progress!";
-                        nexttransfer->pos = nexttransfer->size;
-                        nexttransfer->progresscompleted = nexttransfer->size;
-                    }
-
-                    ts->updatecontiguousprogress();
-                    LOG_debug << "Resuming transfer at " << nexttransfer->pos
-                              << " Completed: " << nexttransfer->progresscompleted
-                              << " Contiguous: " << ts->progresscontiguous
-                              << " Partial: " << p << " Size: " << nexttransfer->size
-                              << " ultoken: " << (nexttransfer->ultoken != NULL);
-                }
-                else
-                {
-                    nexttransfer->chunkmacs.clear();
-                }
-
-                ts->progressreported = nexttransfer->progresscompleted;
-
-                if (d == PUT)
-                {
-                    if (ts->fa->mtime != nexttransfer->mtime || ts->fa->size != nexttransfer->size)
-                    {
-                        LOG_warn << "Modification detected starting upload.   Size: " << nexttransfer->size << "  Mtime: " << nexttransfer->mtime
-                                 << "    FaSize: " << ts->fa->size << "  FaMtime: " << ts->fa->mtime;
-                        nexttransfer->failed(API_EREAD, committer);
-                        continue;
-                    }
-
-                    // create thumbnail/preview imagery, if applicable (FIXME: do not re-create upon restart)
-                    if (nexttransfer->localfilename.size() && !nexttransfer->uploadhandle)
-                    {
-                        nexttransfer->uploadhandle = getuploadhandle();
-
-                        if (!gfxdisabled && gfx && gfx->isgfx(&nexttransfer->localfilename))
-                        {
-                            // we want all imagery to be safely tucked away before completing the upload, so we bump minfa
-                            nexttransfer->minfa += gfx->gendimensionsputfa(ts->fa.get(), &nexttransfer->localfilename, nexttransfer->uploadhandle, nexttransfer->transfercipher(), -1, false);
-                        }
-                    }
-                }
-                else
-                {
-                    for (file_list::iterator it = nexttransfer->files.begin();
-                         it != nexttransfer->files.end(); it++)
-                    {
-                        if (!(*it)->hprivate || (*it)->hforeign || nodebyhandle((*it)->h))
-                        {
-                            h = (*it)->h;
-                            hprivate = (*it)->hprivate;
-                            privauth = (*it)->privauth.size() ? (*it)->privauth.c_str() : NULL;
-                            pubauth = (*it)->pubauth.size() ? (*it)->pubauth.c_str() : NULL;
-                            chatauth = (*it)->chatauth;
-                            break;
-                        }
-                        else
-                        {
-                            LOG_err << "Unexpected node ownership";
-                        }
-                    }
-                }
-
-                // dispatch request for temporary source/target URL
-                if (nexttransfer->tempurls.size())
-                {
-                    ts->transferbuf.setIsRaid(nexttransfer, nexttransfer->tempurls, nexttransfer->pos, ts->maxRequestSize);
-                    app->transfer_prepare(nexttransfer);
-                }
-                else
-                {
-                    reqs.add((ts->pendingcmd = (d == PUT)
-                          ? (Command*)new CommandPutFile(this, ts, putmbpscap)
-                          : (Command*)new CommandGetFile(this, ts, NULL, h, hprivate, privauth, pubauth, chatauth)));
-                }
-
-                LOG_debug << "Activating transfer";
-                ts->slots_it = tslots.insert(tslots.begin(), ts);
-
-                // notify the app about the starting transfer
-                for (file_list::iterator it = nexttransfer->files.begin();
-                     it != nexttransfer->files.end(); it++)
-                {
-                    (*it)->start();
-                }
-                app->transfer_update(nexttransfer);
-
-                performanceStats.transferStarts += 1;
-                return true;
-            }
-            else if (openfinished)
-            {
-                string utf8path;
-                fsaccess->local2path(&nexttransfer->localfilename, &utf8path);
-                if (d == GET)
-                {
-                    LOG_err << "Error dispatching transfer. Temporary file not writable: " << utf8path;
-                    nexttransfer->failed(API_EWRITE, committer);
-                }
-                else if (!ts->fa->retry)
-                {
-                    LOG_err << "Error dispatching transfer. Local file permanently unavailable: " << utf8path;
-                    nexttransfer->failed(API_EREAD, committer);
-                }
-                else
-                {
-                    LOG_warn << "Error dispatching transfer. Local file temporarily unavailable: " << utf8path;
-                    nexttransfer->failed(API_EREAD, committer);
-                }
-            }
         }
         else
         {
@@ -3495,6 +3283,7 @@ bool MegaClient::dispatch(direction_t d)
             nexttransfer->failed(API_EREAD, committer);
         }
     }
+    return false;
 }
 
 // generate upload handle for this upload
@@ -3546,11 +3335,8 @@ void MegaClient::checkfacompletion(handle th, Transfer* t)
                 // we have insufficient file attributes available: remove transfer and put on hold
                 t->faputcompletion_it = faputcompletion.insert(pair<handle, Transfer*>(th, t)).first;
 
-                transfers[t->type].erase(t->transfers_it);
-                t->transfers_it = transfers[t->type].end();
-
-                delete t->slot;
-                t->slot = NULL;
+                // this was not an explicit state before, we used to just remove it from the list (without notifying the client app - should we?)
+                t->setState(TRANSFERSTATE_COMPLETING_FA, 0, nullptr, false, API_OK);
 
                 LOG_debug << "Transfer put on hold. Total: " << faputcompletion.size();
             }
@@ -3564,10 +3350,8 @@ void MegaClient::checkfacompletion(handle th, Transfer* t)
     }
 
     LOG_debug << "Transfer finished, sending callbacks - " << th;    
-    t->state = TRANSFERSTATE_COMPLETED;
-    t->completefiles();
-    looprequested = true;
-    app->transfer_complete(t);
+    // todo: should we set finished=true etc
+    t->setState(TRANSFERSTATE_COMPLETED, 0, nullptr, true, API_OK);
     delete t;
 }
 
@@ -3588,8 +3372,7 @@ void MegaClient::nexttransferretry(direction_t d, dstime* dsmin)
 {
     for (transfer_map::iterator it = transfers[d].begin(); it != transfers[d].end(); it++)
     {
-        if ((!it->second->slot || !it->second->slot->fa)
-         && it->second->bt.nextset())
+        if (it->second->state() == TRANSFERSTATE_RETRYING && it->second->bt.nextset())
         {
             it->second->bt.update(dsmin);
             if (it->second->bt.armed())
@@ -13723,18 +13506,9 @@ void MegaClient::stopxfer(File* f, DBTableTransactionCommitter* committer)
         // last file for this transfer removed? shut down transfer.
         if (!transfer->files.size())
         {
-            if (transfer->slot && transfer->slot->delayedchunk)
-            {
-                int creqtag = reqtag;
-                reqtag = 0;
-                sendevent(99444, "Upload with delayed chunks cancelled");
-                reqtag = creqtag;
-            }
-
+            transfer->setState(TRANSFERSTATE_CANCELLED, 0, nullptr, true, API_OK);
             looprequested = true;
             transfer->finished = true;
-            transfer->state = TRANSFERSTATE_CANCELLED;
-            app->transfer_removed(transfer);
             delete transfer;
         }
         else
@@ -13795,17 +13569,13 @@ void MegaClient::setmaxconnections(direction_t d, int num)
         if (connections[d] != num)
         {
             connections[d] = (unsigned char)num;
+
             for (transferslot_list::iterator it = tslots.begin(); it != tslots.end(); )
             {
-                TransferSlot *slot = *it++;
+                TransferSlot *slot = *it++;  // transfer state change will delete the slot and remove this map entry
                 if (slot->transfer->type == d)
                 {
-                    slot->transfer->state = TRANSFERSTATE_QUEUED;
-                    if (slot->transfer->client->ststatus != STORAGE_RED || slot->transfer->type == GET)
-                    {
-                        slot->transfer->bt.arm();
-                    }
-                    delete slot;
+                    slot->transfer->setState(TRANSFERSTATE_QUEUED, 0, nullptr, false, API_OK);
                 }
             }
         }

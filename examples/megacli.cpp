@@ -292,9 +292,9 @@ void DemoApp::transfer_complete(Transfer* t)
     {
         displaytransferdetails(t, "completed, ");
 
-        if (t->slot)
+        if (t->slot())
         {
-            cout << t->slot->progressreported * 10 / (1024 * (Waiter::ds - t->slot->starttime + 1)) << " KB/s" << endl;
+            cout << t->slot()->progressreported * 10 / (1024 * (Waiter::ds - t->slot()->starttime + 1)) << " KB/s" << endl;
         }
         else
         {
@@ -1948,7 +1948,7 @@ void xferq(direction_t d, int cancel)
                 }
             }
 
-            if ((*it)->transfer && (*it)->transfer->slot)
+            if ((*it)->transfer && (*it)->transfer->state() == TRANSFERSTATE_ACTIVE)
             {
                 cout << " [ACTIVE]";
             }

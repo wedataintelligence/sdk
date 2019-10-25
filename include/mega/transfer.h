@@ -38,9 +38,6 @@ struct MEGA_API Transfer : public FileFingerprint
     // PUT or GET
     direction_t type;
 
-    // transfer slot this transfer is active in (can be NULL if still queued)
-    TransferSlot* slot;
-
     // files belonging to this transfer - transfer terminates upon its last
     // file is removed
     file_list files;
@@ -117,24 +114,18 @@ struct MEGA_API Transfer : public FileFingerprint
     // current wrong metamac
     int64_t currentmetamac;
 
-    // transfer state
+    // destructor to remove any files and the transfer from db cache, and remove any temp file still being downloaded to.
     bool finished;
 
     // temp URLs for upload/download data.  They can be cached.  For uploads, a new url means any previously uploaded data is abandoned.
     // downloads can have 6 for raid, 1 for non-raid.  Uploads always have 1
     std::vector<string> tempurls;
-
-    // context of the async fopen operation
-    AsyncIOContext* asyncopencontext;
-   
+  
     // timestamp of the start of the transfer
     m_time_t lastaccesstime;
 
     // priority of the transfer
     uint64_t priority;
-
-    // state of the transfer
-    transferstate_t state;
 
     bool skipserialization;
 
@@ -149,6 +140,30 @@ struct MEGA_API Transfer : public FileFingerprint
 
     // examine a file on disk for video/audio attributes to attach to the file, on upload/download
     void addAnyMissingMediaFileAttributes(Node* node, std::string& localpath);
+
+    // Use the slot's fa to update `localfilename` (used to be in-line in various places) now that mSlot is private
+    void updatelocalname();
+
+    // working but right at the start or right at the end
+    bool startOrEndProgress();
+
+    // Just one function to alter state and slot, so they stay in sync.
+    void setState(transferstate_t, dstime timeleft, DBTableTransactionCommitter* committer, bool updateapp, error appReason);
+
+    // Read accessor for mState, which is only changed in setState now
+    inline transferstate_t state() { return mState; }
+
+    // Read accessor for mSlot, which is private now - we should work towards removing this function, and keeping the slot as an implementation detail
+    const TransferSlot* Transfer::slot() const { return mSlot.get(); }
+
+private:
+
+    // state of the transfer
+    transferstate_t mState;
+
+    // transfer slot this transfer is active in (can be NULL if still queued)
+    unique_ptr<TransferSlot> mSlot;
+
 };
 
 class MEGA_API TransferList

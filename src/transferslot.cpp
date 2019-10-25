@@ -51,7 +51,8 @@ const dstime TransferSlot::PROGRESSTIMEOUT = 10;
 const m_off_t TransferSlot::MAX_UPLOAD_GAP = 62914560; // 60 MB (up to 63 chunks)
 
 TransferSlot::TransferSlot(Transfer* ctransfer)
-    : retrybt(ctransfer->client->rng)
+    : transfer(ctransfer)
+    , retrybt(ctransfer->client->rng)
     , fa(ctransfer->client->fsaccess->newfileaccess())
 {
     starttime = 0;
@@ -75,11 +76,9 @@ TransferSlot::TransferSlot(Transfer* ctransfer)
     asyncIO = NULL;
     pendingcmd = NULL;
 
-    transfer = ctransfer;
-    transfer->slot = this;
-    transfer->state = TRANSFERSTATE_ACTIVE;
-
-    slots_it = transfer->client->tslots.end();
+    LOG_debug << "Activating transfer";
+    slots_it = transfer->client->tslots.insert(transfer->client->tslots.begin(), this);
+    transfer->client->performanceStats.transferStarts += 1;
 
     maxRequestSize = MAX_REQ_SIZE;
 #if defined(_WIN32) && !defined(WINDOWS_PHONE)
@@ -146,7 +145,7 @@ TransferSlot::~TransferSlot()
 {
     if (transfer->type == GET && !transfer->finished
             && transfer->progresscompleted != transfer->size
-            && !transfer->asyncopencontext)
+            && !asyncopencontext)
     {
         bool cachetransfer = false; // need to save in cache
 
@@ -229,8 +228,6 @@ TransferSlot::~TransferSlot()
         }
     }
 
-    transfer->slot = NULL;
-
     if (slots_it != transfer->client->tslots.end())
     {
         // advance main loop iterator if deleting next in line
@@ -248,10 +245,9 @@ TransferSlot::~TransferSlot()
         pendingcmd->cancel();
     }
 
-    if (transfer->asyncopencontext)
+    if (asyncopencontext)
     {
-        delete transfer->asyncopencontext;
-        transfer->asyncopencontext = NULL;
+        asyncopencontext.reset();
         transfer->client->asyncfopens--;
     }
 
@@ -324,10 +320,182 @@ int64_t TransferSlot::macsmac(chunkmac_map* m)
     return m->macsmac(transfer->transfercipher());
 }
 
+bool TransferSlot::initialFileOpen(MegaClient* client, DBTableTransactionCommitter& committer)
+{
+    bool openok = false;
+
+    if (fa->asyncavailable())
+    {
+        if (!asyncopencontext)
+        {
+            LOG_debug << "Starting async open";
+
+            // try to open file (PUT transfers: open in nonblocking mode)
+            asyncopencontext.reset((transfer->type == PUT)
+                ? fa->asyncfopen(&transfer->localfilename)
+                : fa->asyncfopen(&transfer->localfilename, false, true, transfer->size));
+            client->asyncfopens++;
+        }
+
+        if (asyncopencontext->finished)
+        {
+            LOG_debug << "Async open finished";
+            openok = !asyncopencontext->failed;
+            openfinished = true;
+            asyncopencontext.reset();
+            client->asyncfopens--;
+        }
+
+        assert(!client->asyncfopens);         // todo: surely this would fail?
+    }
+    else
+    {
+        // try to open file (PUT transfers: open in nonblocking mode)
+        openok = (transfer->type == PUT)
+            ? fa->fopen(&transfer->localfilename)
+            : fa->fopen(&transfer->localfilename, false, true);
+        openfinished = true;
+    }
+
+    if (openfinished && openok)
+    {
+        handle h = UNDEF;
+        bool hprivate = true;
+        const char *privauth = NULL;
+        const char *pubauth = NULL;
+        const char *chatauth = NULL;
+
+        transfer->pos = 0;
+        transfer->progresscompleted = 0;
+
+        if (transfer->type == GET || transfer->tempurls.size())
+        {
+            m_off_t p = 0;
+
+            // resume at the end of the last contiguous completed block
+            transfer->chunkmacs.calcprogress(transfer->size, transfer->pos, transfer->progresscompleted, &p);
+
+            if (transfer->progresscompleted > transfer->size)
+            {
+                LOG_err << "Invalid transfer progress!";
+                transfer->pos = transfer->size;
+                transfer->progresscompleted = transfer->size;
+            }
+
+            updatecontiguousprogress();
+            LOG_debug << "Resuming transfer at " << transfer->pos
+                << " Completed: " << transfer->progresscompleted
+                << " Contiguous: " << progresscontiguous
+                << " Partial: " << p << " Size: " << transfer->size
+                << " ultoken: " << (transfer->ultoken != NULL);
+        }
+        else
+        {
+            transfer->chunkmacs.clear();
+        }
+
+        progressreported = transfer->progresscompleted;
+
+        if (transfer->type == PUT)
+        {
+            if (fa->mtime != transfer->mtime || fa->size != transfer->size)
+            {
+                LOG_warn << "Modification detected starting upload.   Size: " << transfer->size << "  Mtime: " << transfer->mtime
+                    << "    FaSize: " << fa->size << "  FaMtime: " << fa->mtime;
+                transfer->failed(API_EREAD, committer);
+                return false;
+            }
+
+            // create thumbnail/preview imagery, if applicable (FIXME: do not re-create upon restart)
+            if (transfer->localfilename.size() && !transfer->uploadhandle)
+            {
+                transfer->uploadhandle = client->getuploadhandle();
+
+                if (!client->gfxdisabled && client->gfx && client->gfx->isgfx(&transfer->localfilename))
+                {
+                    // we want all imagery to be safely tucked away before completing the upload, so we bump minfa
+                    transfer->minfa += client->gfx->gendimensionsputfa(fa.get(), &transfer->localfilename, transfer->uploadhandle, transfer->transfercipher(), -1, false);
+                }
+            }
+        }
+        else
+        {
+            for (file_list::iterator it = transfer->files.begin();
+                it != transfer->files.end(); it++)
+            {
+                if (!(*it)->hprivate || (*it)->hforeign || client->nodebyhandle((*it)->h))
+                {
+                    h = (*it)->h;
+                    hprivate = (*it)->hprivate;
+                    privauth = (*it)->privauth.size() ? (*it)->privauth.c_str() : NULL;
+                    pubauth = (*it)->pubauth.size() ? (*it)->pubauth.c_str() : NULL;
+                    chatauth = (*it)->chatauth;
+                    break;
+                }
+                else
+                {
+                    LOG_err << "Unexpected node ownership";
+                }
+            }
+        }
+
+        // dispatch request for temporary source/target URL
+        if (transfer->tempurls.size())
+        {
+            transferbuf.setIsRaid(transfer, transfer->tempurls, transfer->pos, maxRequestSize);
+            client->app->transfer_prepare(transfer);
+        }
+        else
+        {
+            client->reqs.add((pendingcmd = (transfer->type == PUT)
+                ? (Command*)new CommandPutFile(client, this, client->putmbpscap)
+                : (Command*)new CommandGetFile(client, this, NULL, h, hprivate, privauth, pubauth, chatauth)));
+        }
+
+        // notify the app about the starting transfer
+        // this is only done once we successfully opened the file
+        for (file_list::iterator it = transfer->files.begin();
+            it != transfer->files.end(); it++)
+        {
+            (*it)->start();
+        }
+        client->app->transfer_update(transfer);
+    }
+    else if (openfinished)
+    {
+        string utf8path;
+        client->fsaccess->local2path(&transfer->localfilename, &utf8path);
+        if (transfer->type == GET)
+        {
+            LOG_err << "Error dispatching transfer. Temporary file not writable: " << utf8path;
+            transfer->failed(API_EWRITE, committer);
+        }
+        else if (!fa->retry)
+        {
+            LOG_err << "Error dispatching transfer. Local file permanently unavailable: " << utf8path;
+            transfer->failed(API_EREAD, committer);
+        }
+        else
+        {
+            LOG_warn << "Error dispatching transfer. Local file temporarily unavailable: " << utf8path;
+            transfer->failed(API_EREAD, committer);
+        }
+        return false;
+    }
+    return true;
+}
+
+
 // file transfer state machine
 void TransferSlot::doio(MegaClient* client, DBTableTransactionCommitter& committer)
 {
+    assert(client == transfer->client);
     CodeCounter::ScopeTimer pbt(client->performanceStats.transferslotDoio);
+
+    if (!openfinished && (!initialFileOpen(client, committer) || !openfinished))
+    {
+        return;
+    }
 
     if (!fa || (transfer->size && transfer->progresscompleted == transfer->size)
             || (transfer->type == PUT && transfer->ultoken))
@@ -375,7 +543,6 @@ void TransferSlot::doio(MegaClient* client, DBTableTransactionCommitter& committ
     }
 
     retrying = false;
-    transfer->state = TRANSFERSTATE_ACTIVE;
 
     if (!createconnectionsonce())   // don't use connections, reqs, or asyncIO before this point.
     {
