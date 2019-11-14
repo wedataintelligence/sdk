@@ -94,7 +94,7 @@ class MegaGfxProc : public GfxProcExternal {};
 #ifdef WIN32
     #ifndef WINDOWS_PHONE
     #ifdef USE_CURL
-    class MegaHttpIO : public CurlHttpIO {};
+    class MegaHttpIO : public CurlHttpIO { public: MegaHttpIO(Waiter* w) : CurlHttpIO(w) {} };
     #else
     class MegaHttpIO : public WinHttpIO {};
     #endif

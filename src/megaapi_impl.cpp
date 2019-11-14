@@ -5060,8 +5060,8 @@ void MegaApiImpl::init(MegaApi *api, const char *appKey, MegaGfxProcessor* proce
     mPushSettings = NULL;
     mTimezones = NULL;
 
-    httpio = new MegaHttpIO();
     waiter = new MegaWaiter();
+    httpio = new MegaHttpIO(waiter);
 
 #ifndef __APPLE__
     (void)fseventsfd;

@@ -180,7 +180,8 @@ unsigned long CurlHttpIO::id_function()
 
 #endif
 
-CurlHttpIO::CurlHttpIO()
+CurlHttpIO::CurlHttpIO(Waiter* cw)
+    : clientWaiter(cw)
 {
     curl_version_info_data* data = curl_version_info(CURLVERSION_NOW);
     if (data->version)
@@ -281,12 +282,8 @@ CurlHttpIO::CurlHttpIO()
 
     curlMutex.unlock();
 
-    curlm[API] = curl_multi_init();
-    curlm[GET] = curl_multi_init();
-    curlm[PUT] = curl_multi_init();
-    numconnections[API] = 0;
-    numconnections[GET] = 0;
-    numconnections[PUT] = 0;
+    curlmulti = curl_multi_init();
+    numconnections = 0;
     curlsocketsprocessed = true;
 
     struct ares_options options;
@@ -295,34 +292,34 @@ CurlHttpIO::CurlHttpIO()
     arestimeout = -1;
     filterDNSservers();
 
-    curl_multi_setopt(curlm[API], CURLMOPT_SOCKETFUNCTION, api_socket_callback);
-    curl_multi_setopt(curlm[API], CURLMOPT_SOCKETDATA, this);
-    curl_multi_setopt(curlm[API], CURLMOPT_TIMERFUNCTION, api_timer_callback);
-    curl_multi_setopt(curlm[API], CURLMOPT_TIMERDATA, this);
-    curltimeoutreset[API] = -1;
-    arerequestspaused[API] = false;
-
-    curl_multi_setopt(curlm[GET], CURLMOPT_SOCKETFUNCTION, download_socket_callback);
-    curl_multi_setopt(curlm[GET], CURLMOPT_SOCKETDATA, this);
-    curl_multi_setopt(curlm[GET], CURLMOPT_TIMERFUNCTION, download_timer_callback);
-    curl_multi_setopt(curlm[GET], CURLMOPT_TIMERDATA, this);
-#ifdef _WIN32
-    curl_multi_setopt(curlm[GET], CURLMOPT_MAXCONNECTS, 200);
-#endif
-    curltimeoutreset[GET] = -1;
-    arerequestspaused[GET] = false;
-
-    curl_multi_setopt(curlm[PUT], CURLMOPT_SOCKETFUNCTION, upload_socket_callback);
-    curl_multi_setopt(curlm[PUT], CURLMOPT_SOCKETDATA, this);
-    curl_multi_setopt(curlm[PUT], CURLMOPT_TIMERFUNCTION, upload_timer_callback);
-    curl_multi_setopt(curlm[PUT], CURLMOPT_TIMERDATA, this);
-#ifdef _WIN32
-    curl_multi_setopt(curlm[PUT], CURLMOPT_MAXCONNECTS, 200);
-#endif
-
-    curltimeoutreset[PUT] = -1;
-    arerequestspaused[PUT] = false;
-
+//    curl_multi_setopt(curlm[API], CURLMOPT_SOCKETFUNCTION, api_socket_callback);
+//    curl_multi_setopt(curlm[API], CURLMOPT_SOCKETDATA, this);
+//    curl_multi_setopt(curlm[API], CURLMOPT_TIMERFUNCTION, api_timer_callback);
+//    curl_multi_setopt(curlm[API], CURLMOPT_TIMERDATA, this);
+//    curltimeoutreset[API] = -1;
+//    arerequestspaused[API] = false;
+//
+//    curl_multi_setopt(curlm[GET], CURLMOPT_SOCKETFUNCTION, download_socket_callback);
+//    curl_multi_setopt(curlm[GET], CURLMOPT_SOCKETDATA, this);
+//    curl_multi_setopt(curlm[GET], CURLMOPT_TIMERFUNCTION, download_timer_callback);
+//    curl_multi_setopt(curlm[GET], CURLMOPT_TIMERDATA, this);
+//#ifdef _WIN32
+//    curl_multi_setopt(curlm[GET], CURLMOPT_MAXCONNECTS, 200);
+//#endif
+//    curltimeoutreset[GET] = -1;
+//    arerequestspaused[GET] = false;
+//
+//    curl_multi_setopt(curlm[PUT], CURLMOPT_SOCKETFUNCTION, upload_socket_callback);
+//    curl_multi_setopt(curlm[PUT], CURLMOPT_SOCKETDATA, this);
+//    curl_multi_setopt(curlm[PUT], CURLMOPT_TIMERFUNCTION, upload_timer_callback);
+//    curl_multi_setopt(curlm[PUT], CURLMOPT_TIMERDATA, this);
+//#ifdef _WIN32
+//    curl_multi_setopt(curlm[PUT], CURLMOPT_MAXCONNECTS, 200);
+//#endif
+//
+//    curltimeoutreset[PUT] = -1;
+//    arerequestspaused[PUT] = false;
+//                                   
     curlsh = curl_share_init();
     curl_share_setopt(curlsh, CURLSHOPT_SHARE, CURL_LOCK_DATA_DNS);
     curl_share_setopt(curlsh, CURLSHOPT_SHARE, CURL_LOCK_DATA_SSL_SESSION);
@@ -338,8 +335,9 @@ CurlHttpIO::CurlHttpIO()
     ipv6requestsenabled = false;
     ipv6proxyenabled = ipv6requestsenabled;
     ipv6deactivationtime = Waiter::ds;
-    waiter = NULL;
     proxyport = 0;
+
+    curlThread.reset(new std::thread([this]() { thread_io();  }));
 }
 
 bool CurlHttpIO::ipv6available()
@@ -530,50 +528,50 @@ void CurlHttpIO::addaresevents(Waiter *waiter)
 
 void CurlHttpIO::addcurlevents(Waiter *waiter, direction_t d)
 {
-    CodeCounter::ScopeTimer ccst(countAddCurlEventsCode);
-
-    bool anyWriters = false;
-
-    SockInfoMap &socketmap = curlsockets[d];
-    for (SockInfoMap::iterator it = socketmap.begin(); it != socketmap.end(); it++)
-    {
-        SockInfo &info = it->second;
-        if (!info.mode)
-        {
-            continue;
-        }
-
-#if defined(_WIN32)
-        anyWriters = anyWriters || info.signalledWrite;
-        info.signalledWrite = false;
-
-        if (info.createAssociateEvent())
-        {
-            ((WinWaiter *)waiter)->addhandle(info.eventHandle(), Waiter::NEEDEXEC);
-        }
-#else
-
-        if (info.mode & SockInfo::READ)
-        {
-            FD_SET(info.fd, &((PosixWaiter *)waiter)->rfds);
-            ((PosixWaiter *)waiter)->bumpmaxfd(info.fd);
-        }
-
-        if (info.mode & SockInfo::WRITE)
-        {
-            FD_SET(info.fd, &((PosixWaiter *)waiter)->wfds);
-            ((PosixWaiter *)waiter)->bumpmaxfd(info.fd);
-        }
-#endif
-   }
-
-#if defined(_WIN32)
-    if (anyWriters)
-    {
-        // so long as we are writing at least one socket, keep looping until the socket is full, then start waiting on its associated event
-        static_cast<WinWaiter*>(waiter)->maxds = 0;
-    }
-#endif
+//    CodeCounter::ScopeTimer ccst(countAddCurlEventsCode);
+//
+//    bool anyWriters = false;
+//
+//    SockInfoMap &socketmap = curlsockets[d];
+//    for (SockInfoMap::iterator it = socketmap.begin(); it != socketmap.end(); it++)
+//    {
+//        SockInfo &info = it->second;
+//        if (!info.mode)
+//        {
+//            continue;
+//        }
+//
+//#if defined(_WIN32)
+//        anyWriters = anyWriters || info.signalledWrite;
+//        info.signalledWrite = false;
+//
+//        if (info.createAssociateEvent())
+//        {
+//            ((WinWaiter *)waiter)->addhandle(info.eventHandle(), Waiter::NEEDEXEC);
+//        }
+//#else
+//
+//        if (info.mode & SockInfo::READ)
+//        {
+//            FD_SET(info.fd, &((PosixWaiter *)waiter)->rfds);
+//            ((PosixWaiter *)waiter)->bumpmaxfd(info.fd);
+//        }
+//
+//        if (info.mode & SockInfo::WRITE)
+//        {
+//            FD_SET(info.fd, &((PosixWaiter *)waiter)->wfds);
+//            ((PosixWaiter *)waiter)->bumpmaxfd(info.fd);
+//        }
+//#endif
+//   }
+//
+//#if defined(_WIN32)
+//    if (anyWriters)
+//    {
+//        // so long as we are writing at least one socket, keep looping until the socket is full, then start waiting on its associated event
+//        static_cast<WinWaiter*>(waiter)->maxds = 0;
+//    }
+//#endif
 }
 
 void CurlHttpIO::closearesevents()
@@ -589,14 +587,14 @@ void CurlHttpIO::closearesevents()
 
 void CurlHttpIO::closecurlevents(direction_t d)
 {
-    SockInfoMap &socketmap = curlsockets[d];
-#if defined(_WIN32)
-    for (SockInfoMap::iterator it = socketmap.begin(); it != socketmap.end(); it++)
-    {
-        it->second.closeEvent();
-    }
-#endif
-    socketmap.clear();
+//    SockInfoMap &socketmap = curlsockets[d];
+//#if defined(_WIN32)
+//    for (SockInfoMap::iterator it = socketmap.begin(); it != socketmap.end(); it++)
+//    {
+//        it->second.closeEvent();
+//    }
+//#endif
+//    socketmap.clear();
 }
 
 void CurlHttpIO::processaresevents()
@@ -639,82 +637,83 @@ void CurlHttpIO::processaresevents()
     }
 }
 
-void CurlHttpIO::processcurlevents(direction_t d)
-{
-    CodeCounter::ScopeTimer ccst(countProcessCurlEventsCode);
-
-#ifndef _WIN32
-    fd_set *rfds = &((PosixWaiter *)waiter)->rfds;
-    fd_set *wfds = &((PosixWaiter *)waiter)->wfds;
-#endif
-
-    int dummy = 0;
-    SockInfoMap *socketmap = &curlsockets[d];
-    m_time_t *timeout = &curltimeoutreset[d];
-    bool *paused = &arerequestspaused[d];
-
-    for (SockInfoMap::iterator it = socketmap->begin(); !(*paused) && it != socketmap->end();)
-    {
-        SockInfo &info = (it++)->second;
-        if (!info.mode)
-        {
-            continue;
-        }
-
-#if defined(_WIN32)
-        bool read, write;
-        if (info.checkEvent(read, write))
-        {
-            curl_multi_socket_action(curlm[d], info.fd,
-                                     (read ? CURL_CSELECT_IN : 0)
-                                   | (write ? CURL_CSELECT_OUT : 0), &dummy);
-        }
-#else
-        if (((info.mode & SockInfo::READ) && FD_ISSET(info.fd, rfds)) || ((info.mode & SockInfo::WRITE) && FD_ISSET(info.fd, wfds)))
-        {
-            curl_multi_socket_action(curlm[d], info.fd,
-                                     (((info.mode & SockInfo::READ) && FD_ISSET(info.fd, rfds)) ? CURL_CSELECT_IN : 0)
-                                     | (((info.mode & SockInfo::WRITE) && FD_ISSET(info.fd, wfds)) ? CURL_CSELECT_OUT : 0),
-                                     &dummy);
-        }
-#endif
-    }
-
-    m_time_t value = *timeout;
-    if (value >= 0 && value <= Waiter::ds)
-    {
-        *timeout = -1;
-        LOG_debug << "Disabling cURL timeout";
-        curl_multi_socket_action(curlm[d], CURL_SOCKET_TIMEOUT, 0, &dummy);
-    }
-
-    for (SockInfoMap::iterator it = socketmap->begin(); it != socketmap->end();)
-    {
-        SockInfo &info = it->second;
-        if (!info.mode)
-        {
-            socketmap->erase(it++);
-        }
-        else
-        {
-            it++;
-        }
-    }
-}
+//void CurlHttpIO::processcurlevents(direction_t d)
+//{
+//    CodeCounter::ScopeTimer ccst(countProcessCurlEventsCode);
+//
+//#ifndef _WIN32
+//    fd_set *rfds = &((PosixWaiter *)waiter)->rfds;
+//    fd_set *wfds = &((PosixWaiter *)waiter)->wfds;
+//#endif
+//
+//    int dummy = 0;
+//    SockInfoMap *socketmap = &curlsockets[d];
+//    m_time_t *timeout = &curltimeoutreset[d];
+//    bool *paused = &arerequestspaused[d];
+//
+//    for (SockInfoMap::iterator it = socketmap->begin(); !(*paused) && it != socketmap->end();)
+//    {
+//        SockInfo &info = (it++)->second;
+//        if (!info.mode)
+//        {
+//            continue;
+//        }
+//
+//#if defined(_WIN32)
+//        bool read, write;
+//        if (info.checkEvent(read, write))
+//        {
+//            curl_multi_socket_action(curlm[d], info.fd,
+//                                     (read ? CURL_CSELECT_IN : 0)
+//                                   | (write ? CURL_CSELECT_OUT : 0), &dummy);
+//        }
+//#else
+//        if (((info.mode & SockInfo::READ) && FD_ISSET(info.fd, rfds)) || ((info.mode & SockInfo::WRITE) && FD_ISSET(info.fd, wfds)))
+//        {
+//            curl_multi_socket_action(curlm[d], info.fd,
+//                                     (((info.mode & SockInfo::READ) && FD_ISSET(info.fd, rfds)) ? CURL_CSELECT_IN : 0)
+//                                     | (((info.mode & SockInfo::WRITE) && FD_ISSET(info.fd, wfds)) ? CURL_CSELECT_OUT : 0),
+//                                     &dummy);
+//        }
+//#endif
+//    }
+//
+//    m_time_t value = *timeout;
+//    if (value >= 0 && value <= Waiter::ds)
+//    {
+//        *timeout = -1;
+//        LOG_debug << "Disabling cURL timeout";
+//        curl_multi_socket_action(curlm[d], CURL_SOCKET_TIMEOUT, 0, &dummy);
+//    }
+//
+//    for (SockInfoMap::iterator it = socketmap->begin(); it != socketmap->end();)
+//    {
+//        SockInfo &info = it->second;
+//        if (!info.mode)
+//        {
+//            socketmap->erase(it++);
+//        }
+//        else
+//        {
+//            it++;
+//        }
+//    }
+//}
 
 CurlHttpIO::~CurlHttpIO()
 {
+    asyncQueue.push(nullptr);
+    curlThread->join();
+
     disconnecting = true;
     ares_destroy(ares);
-    curl_multi_cleanup(curlm[API]);
-    curl_multi_cleanup(curlm[GET]);
-    curl_multi_cleanup(curlm[PUT]);
+    curl_multi_cleanup(curlmulti);
     curl_share_cleanup(curlsh);
 
-    closearesevents();
-    closecurlevents(API);
-    closecurlevents(GET);
-    closecurlevents(PUT);
+    //closearesevents();
+    //closecurlevents(API);
+    //closecurlevents(GET);
+    //closecurlevents(PUT);
 
     curlMutex.lock();
     ares_library_cleanup();
@@ -749,86 +748,82 @@ void CurlHttpIO::setdnsservers(const char* servers)
 
 void CurlHttpIO::disconnect()
 {
-    LOG_debug << "Reinitializing the network layer";
-    disconnecting = true;
-    assert(!numconnections[API] && !numconnections[GET] && !numconnections[PUT]);
-
-    ares_destroy(ares);
-    curl_multi_cleanup(curlm[API]);
-    curl_multi_cleanup(curlm[GET]);
-    curl_multi_cleanup(curlm[PUT]);
-
-    if (numconnections[API] || numconnections[GET] || numconnections[PUT])
-    {
-        LOG_err << "Disconnecting without cancelling all requests first";
-        numconnections[API] = 0;
-        numconnections[GET] = 0;
-        numconnections[PUT] = 0;
-    }
-
-    closearesevents();
-    closecurlevents(API);
-    closecurlevents(GET);
-    closecurlevents(PUT);
-
-    lastdnspurge = Waiter::ds + DNS_CACHE_TIMEOUT_DS / 2;
-    if (DNS_CACHE_EXPIRES)
-    {
-        dnscache.clear();
-    }
-
-    curlm[API] = curl_multi_init();
-    curlm[GET] = curl_multi_init();
-    curlm[PUT] = curl_multi_init();
-    struct ares_options options;
-    options.tries = 2;
-    ares_init_options(&ares, &options, ARES_OPT_TRIES);
-    arestimeout = -1;
-
-    curl_multi_setopt(curlm[API], CURLMOPT_SOCKETFUNCTION, api_socket_callback);
-    curl_multi_setopt(curlm[API], CURLMOPT_SOCKETDATA, this);
-    curl_multi_setopt(curlm[API], CURLMOPT_TIMERFUNCTION, api_timer_callback);
-    curl_multi_setopt(curlm[API], CURLMOPT_TIMERDATA, this);
-    curltimeoutreset[API] = -1;
-    arerequestspaused[API] = false;
-
-    curl_multi_setopt(curlm[GET], CURLMOPT_SOCKETFUNCTION, download_socket_callback);
-    curl_multi_setopt(curlm[GET], CURLMOPT_SOCKETDATA, this);
-    curl_multi_setopt(curlm[GET], CURLMOPT_TIMERFUNCTION, download_timer_callback);
-    curl_multi_setopt(curlm[GET], CURLMOPT_TIMERDATA, this);
-#ifdef _WIN32
-    curl_multi_setopt(curlm[GET], CURLMOPT_MAXCONNECTS, 200);
-#endif
-    curltimeoutreset[GET] = -1;
-    arerequestspaused[GET] = false;
-
-
-    curl_multi_setopt(curlm[PUT], CURLMOPT_SOCKETFUNCTION, upload_socket_callback);
-    curl_multi_setopt(curlm[PUT], CURLMOPT_SOCKETDATA, this);
-    curl_multi_setopt(curlm[PUT], CURLMOPT_TIMERFUNCTION, upload_timer_callback);
-    curl_multi_setopt(curlm[PUT], CURLMOPT_TIMERDATA, this);
-#ifdef _WIN32
-    curl_multi_setopt(curlm[PUT], CURLMOPT_MAXCONNECTS, 200);
-#endif
-    curltimeoutreset[PUT] = -1;
-    arerequestspaused[PUT] = false;
-
-    disconnecting = false;
-    if (dnsservers.size())
-    {
-        LOG_debug << "Using custom DNS servers: " << dnsservers;
-        ares_set_servers_csv(ares, dnsservers.c_str());
-    }
-    else
-    {
-        filterDNSservers();
-    }
-
-    if (proxyurl.size() && !proxyip.size())
-    {
-        LOG_debug << "Unresolved proxy name. Resolving...";
-        request_proxy_ip();
-    }
+//    LOG_debug << "Reinitializing the network layer";
+//    disconnecting = true;
+//    assert(!numconnections);
+//
+//    ares_destroy(ares);
+//    curl_multi_cleanup(curlmulti);
+//
+//    if (numconnections)
+//    {
+//        LOG_err << "Disconnecting without cancelling all requests first";
+//        numconnections = 0;
+//    }
+//
+//    closearesevents();
+//    closecurlevents(API);
+//    closecurlevents(GET);
+//    closecurlevents(PUT);
+//
+//    lastdnspurge = Waiter::ds + DNS_CACHE_TIMEOUT_DS / 2;
+//    if (DNS_CACHE_EXPIRES)
+//    {
+//        dnscache.clear();
+//    }
+//
+//    curlm[API] = curl_multi_init();
+//    curlm[GET] = curl_multi_init();
+//    curlm[PUT] = curl_multi_init();
+//    struct ares_options options;
+//    options.tries = 2;
+//    ares_init_options(&ares, &options, ARES_OPT_TRIES);
+//    arestimeout = -1;
+//
+//    curl_multi_setopt(curlm[API], CURLMOPT_SOCKETFUNCTION, api_socket_callback);
+//    curl_multi_setopt(curlm[API], CURLMOPT_SOCKETDATA, this);
+//    curl_multi_setopt(curlm[API], CURLMOPT_TIMERFUNCTION, api_timer_callback);
+//    curl_multi_setopt(curlm[API], CURLMOPT_TIMERDATA, this);
+//    curltimeoutreset[API] = -1;
+//    arerequestspaused[API] = false;
+//
+//    curl_multi_setopt(curlm[GET], CURLMOPT_SOCKETFUNCTION, download_socket_callback);
+//    curl_multi_setopt(curlm[GET], CURLMOPT_SOCKETDATA, this);
+//    curl_multi_setopt(curlm[GET], CURLMOPT_TIMERFUNCTION, download_timer_callback);
+//    curl_multi_setopt(curlm[GET], CURLMOPT_TIMERDATA, this);
+//#ifdef _WIN32
+//    curl_multi_setopt(curlm[GET], CURLMOPT_MAXCONNECTS, 200);
+//#endif
+//    curltimeoutreset[GET] = -1;
+//    arerequestspaused[GET] = false;
+//
+//
+//    curl_multi_setopt(curlm[PUT], CURLMOPT_SOCKETFUNCTION, upload_socket_callback);
+//    curl_multi_setopt(curlm[PUT], CURLMOPT_SOCKETDATA, this);
+//    curl_multi_setopt(curlm[PUT], CURLMOPT_TIMERFUNCTION, upload_timer_callback);
+//    curl_multi_setopt(curlm[PUT], CURLMOPT_TIMERDATA, this);
+//#ifdef _WIN32
+//    curl_multi_setopt(curlm[PUT], CURLMOPT_MAXCONNECTS, 200);
+//#endif
+//    curltimeoutreset[PUT] = -1;
+//    arerequestspaused[PUT] = false;
+//
+//    disconnecting = false;
+//    if (dnsservers.size())
+//    {
+//        LOG_debug << "Using custom DNS servers: " << dnsservers;
+//        ares_set_servers_csv(ares, dnsservers.c_str());
+//    }
+//    else
+//    {
+//        filterDNSservers();
+//    }
+//
+//    if (proxyurl.size() && !proxyip.size())
+//    {
+//        LOG_debug << "Unresolved proxy name. Resolving...";
+//        request_proxy_ip();
+//    }
 }
 
 bool CurlHttpIO::setmaxdownloadspeed(m_off_t bpslimit)
@@ -853,85 +848,85 @@ m_off_t CurlHttpIO::getmaxuploadspeed()
     return maxspeed[PUT];
 }
 
-// wake up from cURL I/O
+//// wake up from cURL I/O
 void CurlHttpIO::addevents(Waiter* w, int)
 {
     CodeCounter::ScopeTimer ccst(countCurlHttpIOAddevents);
 
-    waiter = (WAIT_CLASS*)w;
-    long curltimeoutms = -1;
-
+    WAIT_CLASS* waiter = (WAIT_CLASS*)w;
+//    long curltimeoutms = -1;
+//
     addaresevents(waiter);
-    addcurlevents(waiter, API);
-    if (curltimeoutreset[API] >= 0)
-    {
-        m_time_t ds = curltimeoutreset[API] - Waiter::ds;
-        if (ds <= 0)
-        {
-            curltimeoutms = 0;
-            //if (ds < 0) curltimeoutreset[API] = -1;
-        }
-        else
-        {
-            if (curltimeoutms < 0 || curltimeoutms > ds * 100)
-            {
-                curltimeoutms = long(ds * 100);
-            }
-        }
-    }
-
-    for (int d = GET; d == GET || d == PUT; d += PUT - GET)
-    {
-        if (arerequestspaused[d])
-        {
-            if (curltimeoutms < 0 || curltimeoutms > 100)
-            {
-                curltimeoutms = 100;
-            }
-        }
-        else
-        {
-            addcurlevents(waiter, (direction_t)d);
-            if (curltimeoutreset[d] >= 0)
-            {
-                m_time_t ds = curltimeoutreset[d] - Waiter::ds;
-                if (ds <= 0)
-                {
-                    curltimeoutms = 0;
-                    //if (ds < 0) curltimeoutreset[d] = -1;
-                }
-                else
-                {
-                    if (curltimeoutms < 0 || curltimeoutms > ds * 100)
-                    {
-                        curltimeoutms = long(ds * 100);
-                    }
-                }
-            }
-        }
-    }
-
-    if ((curltimeoutms < 0 || curltimeoutms > MAX_SPEED_CONTROL_TIMEOUT_MS)
-            && (downloadSpeed || uploadSpeed))
-    {
-        curltimeoutms = MAX_SPEED_CONTROL_TIMEOUT_MS;
-    }
-
-    if (curltimeoutms >= 0)
-    {
-        m_time_t timeoutds = curltimeoutms / 100;
-        if (curltimeoutms % 100)
-        {
-            timeoutds++;
-        }
-
-        if ((unsigned long)timeoutds < waiter->maxds)
-        {
-            waiter->maxds = dstime(timeoutds);
-        }
-    }
-    curlsocketsprocessed = false;
-
+//    addcurlevents(waiter, API);
+//    if (curltimeoutreset[API] >= 0)
+//    {
+//        m_time_t ds = curltimeoutreset[API] - Waiter::ds;
+//        if (ds <= 0)
+//        {
+//            curltimeoutms = 0;
+//            //if (ds < 0) curltimeoutreset[API] = -1;
+//        }
+//        else
+//        {
+//            if (curltimeoutms < 0 || curltimeoutms > ds * 100)
+//            {
+//                curltimeoutms = long(ds * 100);
+//            }
+//        }
+//    }
+//
+//    for (int d = GET; d == GET || d == PUT; d += PUT - GET)
+//    {
+//        if (arerequestspaused[d])
+//        {
+//            if (curltimeoutms < 0 || curltimeoutms > 100)
+//            {
+//                curltimeoutms = 100;
+//            }
+//        }
+//        else
+//        {
+//            addcurlevents(waiter, (direction_t)d);
+//            if (curltimeoutreset[d] >= 0)
+//            {
+//                m_time_t ds = curltimeoutreset[d] - Waiter::ds;
+//                if (ds <= 0)
+//                {
+//                    curltimeoutms = 0;
+//                    //if (ds < 0) curltimeoutreset[d] = -1;
+//                }
+//                else
+//                {
+//                    if (curltimeoutms < 0 || curltimeoutms > ds * 100)
+//                    {
+//                        curltimeoutms = long(ds * 100);
+//                    }
+//                }
+//            }
+//        }
+//    }
+//
+//    if ((curltimeoutms < 0 || curltimeoutms > MAX_SPEED_CONTROL_TIMEOUT_MS)
+//            && (downloadSpeed || uploadSpeed))
+//    {
+//        curltimeoutms = MAX_SPEED_CONTROL_TIMEOUT_MS;
+//    }
+//
+//    if (curltimeoutms >= 0)
+//    {
+//        m_time_t timeoutds = curltimeoutms / 100;
+//        if (curltimeoutms % 100)
+//        {
+//            timeoutds++;
+//        }
+//
+//        if ((unsigned long)timeoutds < waiter->maxds)
+//        {
+//            waiter->maxds = dstime(timeoutds);
+//        }
+//    }
+//    curlsocketsprocessed = false;
+//
     timeval tv;
     if (ares_timeout(ares, NULL, &tv))
     {
@@ -1245,7 +1240,7 @@ void CurlHttpIO::ares_completed_callback(void* arg, int status, int, struct host
         // otherwise, queue the request until we get the IP of the proxy
         if (!httpio->proxyurl.size() || httpio->proxyip.size() || req->method == METHOD_NONE)
         {
-            send_request(httpctx);
+            httpio->send_request(httpctx);
         }
         else if (!httpctx->ares_pending)
         {
@@ -1506,10 +1501,13 @@ void CurlHttpIO::send_request(CurlHttpContext* httpctx)
             }
         }
 
-        httpio->numconnections[httpctx->d]++;
-        curl_multi_add_handle(httpio->curlm[httpctx->d], curl);
+        httpio->numconnections++;
         httpctx->curl = curl;
-    }
+
+        asyncQueue.push([httpio, curl]() {
+            curl_multi_add_handle(httpio->curlmulti, curl);
+        });
+   }
     else
     {
         req->status = REQ_FAILURE;
@@ -1919,32 +1917,41 @@ void CurlHttpIO::cancel(HttpReq* req)
 {
     if (req->httpiohandle)
     {
-        CurlHttpContext* httpctx = (CurlHttpContext*)req->httpiohandle;
-        if (httpctx->curl)
+        asyncQueue.push([req, this]() {
+
+            CurlHttpContext* httpctx = (CurlHttpContext*)req->httpiohandle;
+
+            if (httpctx->curl)
+            {
+                numconnections--;
+                //pausedrequests[httpctx->d].erase(httpctx->curl);
+                curl_multi_remove_handle(curlmulti, httpctx->curl);
+                curl_easy_cleanup(httpctx->curl);
+                curl_slist_free_all(httpctx->headers);
+            }
+
+            httpctx->req = NULL;
+
+            if ((req->status == REQ_FAILURE || httpctx->curl) && !httpctx->ares_pending)
+            {
+                delete httpctx;
+            }
+
+            req->httpstatus = 0;
+
+            if (req->status != REQ_FAILURE)
+            {
+                req->status = REQ_FAILURE;
+                statechange = true;
+            }
+
+            req->httpiohandle = NULL;
+        });
+
+        while (!asyncQueue.empty())
         {
-            numconnections[httpctx->d]--;
-            pausedrequests[httpctx->d].erase(httpctx->curl);
-            curl_multi_remove_handle(curlm[httpctx->d], httpctx->curl);
-            curl_easy_cleanup(httpctx->curl);
-            curl_slist_free_all(httpctx->headers);
+            Sleep(1);
         }
-
-        httpctx->req = NULL;
-
-        if ((req->status == REQ_FAILURE || httpctx->curl) && !httpctx->ares_pending)
-        {
-            delete httpctx;
-        }
-
-        req->httpstatus = 0;
-
-        if (req->status != REQ_FAILURE)
-        {
-            req->status = REQ_FAILURE;
-            statechange = true;
-        }
-
-        req->httpiohandle = NULL;
     }
 }
 
@@ -1962,55 +1969,95 @@ m_off_t CurlHttpIO::postpos(void* handle)
     return (m_off_t)bytes;
 }
 
-// process events
-bool CurlHttpIO::doio()
+bool CurlHttpIO::doio(void) 
 {
-    bool result;
-    statechange = false;
+        processaresevents();
 
-    processaresevents();
+    return false;
+}
 
-    result = statechange;
-    statechange = false;
+// process events
+bool CurlHttpIO::thread_io()
+{
 
-    if (curlsocketsprocessed)
+    for (;;)
     {
-        return result;
-    }
 
-    processcurlevents(API);
-    result |= multidoio(curlm[API]);
-
-    for (int d = GET; d == GET || d == PUT; d += PUT - GET)
-    {
-        partialdata[d] = 0;
-        if (arerequestspaused[d])
         {
-            arerequestspaused[d] = false;
-            set<CURL *>::iterator it = pausedrequests[d].begin();
-            while (!arerequestspaused[d] && it != pausedrequests[d].end())
+            std::unique_lock<std::mutex> g(asyncQueue.m);
+            while (!asyncQueue.q.empty())
             {
-                CURL *easy_handle = *it;
-                pausedrequests[d].erase(it++);
-                curl_easy_pause(easy_handle, CURLPAUSE_CONT);
-            }
-
-            if (!arerequestspaused[d])
-            {
-                int dummy;
-                curl_multi_socket_action(curlm[d], CURL_SOCKET_TIMEOUT, 0, &dummy);
+                auto f = std::move(asyncQueue.q.front());
+                if (!f) return false;
+                asyncQueue.q.pop_front();
+                g.unlock();
+                f();
+                g.lock();
             }
         }
 
-        if (!arerequestspaused[d])
-        {
-            processcurlevents((direction_t)d);
-            result |= multidoio(curlm[d]);
-        }
+        bool result;
+        statechange = false;
+
+        //processaresevents();
+
+        result = statechange;
+        statechange = false;
+
+        //if (curlsocketsprocessed)
+        //{
+        //    return result;
+        //}
+
+        //processcurlevents(API);
+
+        int runninghandles = 0;
+        curl_multi_perform(curlmulti, &runninghandles);
+
+        multidoio(curlmulti);
+
+        int numfds = 0; // todo: figure out how to pass in an event that we can trigger this function to wake up
+        curl_multi_wait(curlmulti, nullptr, 0, 1, &numfds);
+        //if (numfds == 0)
+        //{
+        //    Sleep(1);
+        //}
     }
 
-    curlsocketsprocessed = true;
-    return result;
+
+    //for (int d = GET; d == GET || d == PUT; d += PUT - GET)
+    //{
+    //    partialdata[d] = 0;
+    //    //if (arerequestspaused[d])
+    //    //{
+    //    //    arerequestspaused[d] = false;
+    //    //    set<CURL *>::iterator it = pausedrequests[d].begin();
+    //    //    while (!arerequestspaused[d] && it != pausedrequests[d].end())
+    //    //    {
+    //    //        CURL *easy_handle = *it;
+    //    //        pausedrequests[d].erase(it++);
+    //    //        curl_easy_pause(easy_handle, CURLPAUSE_CONT);
+    //    //    }
+
+    //    //    if (!arerequestspaused[d])
+    //    //    {
+    //    //        int dummy;
+    //    //        curl_multi_socket_action(curlm[d], CURL_SOCKET_TIMEOUT, 0, &dummy);
+    //    //    }
+    //    //}
+
+    //    //if (!arerequestspaused[d])
+
+
+
+    //    {
+    //        processcurlevents((direction_t)d);
+    //        result |= multidoio(curlm[d]);
+    //    }
+    //}
+
+    //curlsocketsprocessed = true;
+    //return result;
 }
 
 bool CurlHttpIO::multidoio(CURLM *curlmhandle)
@@ -2199,8 +2246,8 @@ bool CurlHttpIO::multidoio(CURLM *curlmhandle)
                         if ((dnsEntry.ipv4.size() && !dnsEntry.isIPv4Expired())
                                 || (!httpctx->isCachedIp && httpctx->ares_pending))
                         {
-                            numconnections[httpctx->d]--;
-                            pausedrequests[httpctx->d].erase(msg->easy_handle);
+                            numconnections--;
+                            //pausedrequests[httpctx->d].erase(msg->easy_handle);
                             curl_multi_remove_handle(curlmhandle, msg->easy_handle);
                             curl_easy_cleanup(msg->easy_handle);
                             curl_slist_free_all(httpctx->headers);
@@ -2244,8 +2291,8 @@ bool CurlHttpIO::multidoio(CURLM *curlmhandle)
             CurlHttpContext* httpctx = (CurlHttpContext*)req->httpiohandle;
             if (httpctx)
             {
-                numconnections[httpctx->d]--;
-                pausedrequests[httpctx->d].erase(httpctx->curl);
+                numconnections--;
+                //pausedrequests[httpctx->d].erase(httpctx->curl);
 
                 curl_slist_free_all(httpctx->headers);
                 req->httpiohandle = NULL;
@@ -2261,6 +2308,12 @@ bool CurlHttpIO::multidoio(CURLM *curlmhandle)
 
     result = statechange;
     statechange = false;
+
+    if (result)
+    {
+        clientWaiter->notify();
+    }
+
     return result;
 }
 
@@ -2344,8 +2397,8 @@ size_t CurlHttpIO::read_data(void* ptr, size_t size, size_t nmemb, void* source)
             long maxbytes = long( (httpio->maxspeed[PUT] - httpio->uploadSpeed) * (SpeedController::SPEED_MEAN_INTERVAL_DS / 10) - httpio->partialdata[PUT] );
             if (maxbytes <= 0)
             {
-                httpio->pausedrequests[PUT].insert(httpctx->curl);
-                httpio->arerequestspaused[PUT] = true;
+                //httpio->pausedrequests[PUT].insert(httpctx->curl);
+                //httpio->arerequestspaused[PUT] = true;
                 return CURL_READFUNC_PAUSE;
             }
 
@@ -2379,9 +2432,9 @@ size_t CurlHttpIO::write_data(void* ptr, size_t size, size_t nmemb, void* target
             {
                 if ((httpio->downloadSpeed + 10 * (httpio->partialdata[GET] + len) / SpeedController::SPEED_MEAN_INTERVAL_DS) > httpio->maxspeed[GET])
                 {
-                    CurlHttpContext* httpctx = (CurlHttpContext*)req->httpiohandle;
-                    httpio->pausedrequests[GET].insert(httpctx->curl);
-                    httpio->arerequestspaused[GET] = true;
+                    //CurlHttpContext* httpctx = (CurlHttpContext*)req->httpiohandle;
+                    //httpio->pausedrequests[GET].insert(httpctx->curl);
+                    //httpio->arerequestspaused[GET] = true;
                     return CURL_WRITEFUNC_PAUSE;
                 }
                 httpio->partialdata[GET] += len;
@@ -2499,33 +2552,33 @@ int CurlHttpIO::seek_data(void *userp, curl_off_t offset, int origin)
     return CURL_SEEKFUNC_OK;
 }
 
-int CurlHttpIO::socket_callback(CURL *, curl_socket_t s, int what, void *userp, void *, direction_t d)
-{
-    CurlHttpIO *httpio = (CurlHttpIO *)userp;
-    SockInfoMap &socketmap = httpio->curlsockets[d];
-
-    if (what == CURL_POLL_REMOVE)
-    {
-        LOG_debug << "Removing socket " << s;
-
-        socketmap[s].mode = 0;
-#if defined(_WIN32)
-        socketmap[s].closeEvent();
-#endif
-    }
-    else
-    {
-        LOG_debug << "Adding/setting curl socket " << s << " to " << what;
-        auto& info = socketmap[s];
-        info.fd = s;
-        info.mode = what;
-#if defined(_WIN32)
-        info.createAssociateEvent();
-#endif
-    }
-
-    return 0;
-}
+//int CurlHttpIO::socket_callback(CURL *, curl_socket_t s, int what, void *userp, void *, direction_t d)
+//{
+//    CurlHttpIO *httpio = (CurlHttpIO *)userp;
+//    SockInfoMap &socketmap = httpio->curlsockets[d];
+//
+//    if (what == CURL_POLL_REMOVE)
+//    {
+//        LOG_debug << "Removing socket " << s;
+//
+//        socketmap[s].mode = 0;
+//#if defined(_WIN32)
+//        socketmap[s].closeEvent();
+//#endif
+//    }
+//    else
+//    {
+//        LOG_debug << "Adding/setting curl socket " << s << " to " << what;
+//        auto& info = socketmap[s];
+//        info.fd = s;
+//        info.mode = what;
+//#if defined(_WIN32)
+//        info.createAssociateEvent();
+//#endif
+//    }
+//
+//    return 0;
+//}
 
 //int CurlHttpIO::sockopt_callback(void *clientp, curl_socket_t, curlsocktype)
 //{
@@ -2550,57 +2603,57 @@ int CurlHttpIO::socket_callback(CURL *, curl_socket_t s, int what, void *userp, 
 //    return CURL_SOCKOPT_OK;
 //}
 
-int CurlHttpIO::api_socket_callback(CURL *e, curl_socket_t s, int what, void *userp, void *socketp)
-{
-    return socket_callback(e, s, what, userp, socketp, API);
-}
+//int CurlHttpIO::api_socket_callback(CURL *e, curl_socket_t s, int what, void *userp, void *socketp)
+//{
+//    return socket_callback(e, s, what, userp, socketp, API);
+//}
+//
+//int CurlHttpIO::download_socket_callback(CURL *e, curl_socket_t s, int what, void *userp, void *socketp)
+//{
+//    return socket_callback(e, s, what, userp, socketp, GET);
+//}
+//
+//int CurlHttpIO::upload_socket_callback(CURL *e, curl_socket_t s, int what, void *userp, void *socketp)
+//{
+//    return socket_callback(e, s, what, userp, socketp, PUT);
+//}
 
-int CurlHttpIO::download_socket_callback(CURL *e, curl_socket_t s, int what, void *userp, void *socketp)
-{
-    return socket_callback(e, s, what, userp, socketp, GET);
-}
+//int CurlHttpIO::timer_callback(CURLM *, long timeout_ms, void *userp, direction_t d)
+//{
+//    CurlHttpIO *httpio = (CurlHttpIO *)userp;
+//    if (timeout_ms < 0)
+//    {
+//        httpio->curltimeoutreset[d] = -1;
+//    }
+//    else
+//    {
+//        m_time_t timeoutds = timeout_ms / 100;
+//        if (timeout_ms % 100)
+//        {
+//            timeoutds++;
+//        }
+//
+//        httpio->curltimeoutreset[d] = Waiter::ds + timeoutds;
+//    }
+//
+//    LOG_debug << "Set cURL timeout[" << d << "] to " << httpio->curltimeoutreset[d] << " ms from " << timeout_ms;
+//    return 0;
+//}
 
-int CurlHttpIO::upload_socket_callback(CURL *e, curl_socket_t s, int what, void *userp, void *socketp)
-{
-    return socket_callback(e, s, what, userp, socketp, PUT);
-}
-
-int CurlHttpIO::timer_callback(CURLM *, long timeout_ms, void *userp, direction_t d)
-{
-    CurlHttpIO *httpio = (CurlHttpIO *)userp;
-    if (timeout_ms < 0)
-    {
-        httpio->curltimeoutreset[d] = -1;
-    }
-    else
-    {
-        m_time_t timeoutds = timeout_ms / 100;
-        if (timeout_ms % 100)
-        {
-            timeoutds++;
-        }
-
-        httpio->curltimeoutreset[d] = Waiter::ds + timeoutds;
-    }
-
-    LOG_debug << "Set cURL timeout[" << d << "] to " << httpio->curltimeoutreset[d] << " ms from " << timeout_ms;
-    return 0;
-}
-
-int CurlHttpIO::api_timer_callback(CURLM *multi, long timeout_ms, void *userp)
-{
-    return timer_callback(multi, timeout_ms, userp, API);
-}
-
-int CurlHttpIO::download_timer_callback(CURLM *multi, long timeout_ms, void *userp)
-{
-    return timer_callback(multi, timeout_ms, userp, GET);
-}
-
-int CurlHttpIO::upload_timer_callback(CURLM *multi, long timeout_ms, void *userp)
-{
-    return timer_callback(multi, timeout_ms, userp, PUT);
-}
+//int CurlHttpIO::api_timer_callback(CURLM *multi, long timeout_ms, void *userp)
+//{
+//    return timer_callback(multi, timeout_ms, userp, API);
+//}
+//
+//int CurlHttpIO::download_timer_callback(CURLM *multi, long timeout_ms, void *userp)
+//{
+//    return timer_callback(multi, timeout_ms, userp, GET);
+//}
+//
+//int CurlHttpIO::upload_timer_callback(CURLM *multi, long timeout_ms, void *userp)
+//{
+//    return timer_callback(multi, timeout_ms, userp, PUT);
+//}
 
 #ifdef USE_OPENSSL
 CURLcode CurlHttpIO::ssl_ctx_function(CURL*, void* sslctx, void*req)
@@ -2890,5 +2943,13 @@ void CurlHttpIO::initialize_android()
     }
 }
 #endif
+
+
+void CurlHttpIOAsyncQueue::push(std::function<void()>&& f)
+{
+    std::lock_guard g(m);
+    q.emplace_back(std::move(f));
+}
+
 
 } // namespace

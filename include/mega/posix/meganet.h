@@ -65,15 +65,31 @@ private:
 #endif
 };
 
+
+struct CurlHttpIOAsyncQueue
+{
+    void push(std::function<void()>&& f);
+    std::mutex m;
+    std::deque<std::function<void()>> q;
+
+    bool empty() {
+        std::lock_guard<std::mutex> g(m); 
+        return q.empty();
+    }
+};
+
+
 struct MEGA_API CurlDNSEntry;
 struct MEGA_API CurlHttpContext;
 class CurlHttpIO: public HttpIO
 {
+    CurlHttpIOAsyncQueue asyncQueue;
+
 protected:
     static std::mutex curlMutex;
 
     string useragent;
-    CURLM* curlm[3];
+    CURLM* curlmulti = nullptr;
 
     CURLSH* curlsh;
     ares_channel ares;
@@ -133,7 +149,7 @@ protected:
 
     static void proxy_ready_callback(void*, int, int, struct hostent*);
     static void ares_completed_callback(void*, int, int, struct hostent*);
-    static void send_request(CurlHttpContext*);
+    void send_request(CurlHttpContext*);
     void request_proxy_ip();
     static struct curl_slist* clone_curl_slist(struct curl_slist*);
     static bool crackurl(string*, string*, string*, int*);
@@ -148,7 +164,6 @@ protected:
     string dnsservers;
     curl_slist* contenttypejson;
     curl_slist* contenttypebinary;
-    WAIT_CLASS* waiter;
     bool disconnecting;
 
     void addaresevents(Waiter *waiter);
@@ -159,11 +174,11 @@ protected:
     void processcurlevents(direction_t d);
     typedef std::map<curl_socket_t, SockInfo> SockInfoMap;
     SockInfoMap aressockets;
-    SockInfoMap curlsockets[3];
-    m_time_t curltimeoutreset[3];
-    bool arerequestspaused[3];
-    int numconnections[3];
-    set<CURL *>pausedrequests[3];
+    //SockInfoMap curlsockets;
+    m_time_t curltimeoutreset;
+    //bool arerequestspaused[3];
+    int numconnections;
+    //set<CURL *>pausedrequests[3];
     m_off_t partialdata[2];
     m_off_t maxspeed[2];
     bool curlsocketsprocessed;
@@ -175,7 +190,8 @@ public:
 
     m_off_t postpos(void*);
 
-    bool doio(void);
+    bool doio(void) override;
+    bool thread_io(void);
     bool multidoio(CURLM *curlmhandle);
 
     void addevents(Waiter*, int);
@@ -197,7 +213,9 @@ public:
     // get max upload speed
     virtual m_off_t getmaxuploadspeed();
 
-    CurlHttpIO();
+    Waiter* clientWaiter = nullptr;
+    
+    CurlHttpIO(Waiter* w);
     ~CurlHttpIO();
 
     CodeCounter::ScopeStats countCurlHttpIOAddevents = { "curl-httpio-addevents" };
@@ -205,6 +223,8 @@ public:
     CodeCounter::ScopeStats countAddCurlEventsCode = { "curl-add-events" };
     CodeCounter::ScopeStats countProcessAresEventsCode = { "ares-process-events" };
     CodeCounter::ScopeStats countProcessCurlEventsCode = { "curl-process-events" };
+
+    unique_ptr<std::thread> curlThread;
 };
 
 struct MEGA_API CurlHttpContext
