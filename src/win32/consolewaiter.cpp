@@ -51,7 +51,7 @@ int WinConsoleWaiter::wait()
     if (console)
     {
 
-        addhandle(console->inputAvailableHandle(), 0);
+        addhandle(console->inputAvailableHandle(), HAVESTDIN);
     }
 #else
     addhandle(hInput, 0);

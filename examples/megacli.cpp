@@ -22,6 +22,13 @@
 #include "mega.h"
 #include "megacli.h"
 #include <fstream>
+#include <cctype>
+#include <mega/autocomplete.h>
+
+#ifdef WIN32
+#include <winioctl.h>
+#include <fltuser.h>
+#endif
 
 #define USE_VARARGS
 #define PREFER_STDARG
@@ -1565,6 +1572,14 @@ static Node* nodebypath(const char* ptr, string* user = NULL, string* namepart =
 
     if (remote)
     {
+
+        // target: node specified by handle "H:ABCDEF123"
+        if (c.size() == 2 && !c[0].compare("H"))
+        {
+            handle h = 0;
+            return Base64::atob(c[1].c_str(), (byte*)&h, MegaClient::NODEHANDLE) == MegaClient::NODEHANDLE ? client->nodebyhandle(h) : nullptr;
+        }
+
         // target: user inbox - record username/email and return NULL
         if (c.size() == 2 && c[0].find("@") != string::npos && !c[1].size())
         {
@@ -2612,6 +2627,206 @@ void exec_quit(ac::ACState&)
     quit_flag = true;
 }
 
+#ifdef WIN32
+void exec_connectminifilter(ac::ACState& s)
+{
+    fs::path localfolder = s.words[1].s;
+
+    if (!fs::exists(localfolder))
+    {
+        cout << "Folder does not exist: " << localfolder << endl;
+        return;
+    }
+
+    if (!fs::is_directory(localfolder))
+    {
+        cout << "Local path is not a folder: " << localfolder << endl;
+        return;
+    }
+
+    WCHAR dosRootPath[1024];
+    if (!QueryDosDeviceW((LPCWSTR)localfolder.root_name().u16string().c_str(), dosRootPath, sizeof dosRootPath))
+    {
+        cout << "Could not get the DOS name for: " << localfolder.root_name().u8string() << endl;
+    }
+
+    HANDLE port;
+    HRESULT hr = FilterConnectCommunicationPort(L"\\MEGA.nz-minifilter", 0, dosRootPath, WORD(wcslen(dosRootPath)+1), NULL, &port);
+
+    if (hr != S_OK) {
+
+        cout << "FilterConnectCommunicationPort failed: 0x" << std::hex << hr << std::dec << endl;
+        return;
+    }
+
+    HANDLE completion = CreateIoCompletionPort(port, NULL, 0, 1);
+    if (completion == NULL) {
+
+        cout << "CreateIoCompletionPort failed." << endl;
+        CloseHandle(port);
+        return;
+    }
+
+    new std::thread([port, completion]() {
+
+
+        while (TRUE) {
+
+            typedef struct {
+                FILTER_MESSAGE_HEADER MessageHeader;
+                struct {
+
+                    ULONG RequestType;
+                    ULONG NameLength;             // for quad-word alignment of the Contents structure
+                    WCHAR Contents[4 * 1024];
+                } request;
+                OVERLAPPED Ovlp;
+            } REQUEST_FRAME;
+
+            REQUEST_FRAME message;
+            memset(&message.Ovlp, 0, sizeof(OVERLAPPED));
+
+            HRESULT hr = FilterGetMessage(port, &message.MessageHeader, FIELD_OFFSET(REQUEST_FRAME, Ovlp), &message.Ovlp);
+            if (hr != HRESULT_FROM_WIN32(ERROR_IO_PENDING))
+            {
+                cout << "FilterGetMessage result was not PENDING: " << std::hex << hr << std::dec << endl;
+                return;
+            }
+
+            LPOVERLAPPED pOvlp;
+            DWORD outSize;
+            ULONG_PTR key;
+            if (!GetQueuedCompletionStatus(completion, &outSize, &key, &pOvlp, INFINITE))
+            {
+                cout << "GetQueuedCompletionStatus failed." << endl;
+                return;
+            }
+
+            printf("Received message, size %Id\n", pOvlp->InternalHigh);
+
+            std::wcout << "received type " << message.request.RequestType << endl;
+            std::wcout << "received filename length (bytes)" << message.request.NameLength << endl;
+            std::wcout << "received filename (wchars) " << std::wstring((wchar_t*)message.request.Contents, message.request.NameLength/2) << endl;
+
+            typedef struct _SCANNER_REPLY_MESSAGE {
+                FILTER_REPLY_HEADER ReplyHeader;
+                struct REPLY {
+                    BOOLEAN SafeToOpen;
+                } reply;
+            } REPLY_FRAME;
+
+            REPLY_FRAME reply;
+
+            reply.ReplyHeader.Status = 0;
+            reply.ReplyHeader.MessageId = message.MessageHeader.MessageId;
+
+            reply.reply.SafeToOpen = TRUE;
+
+            hr = FilterReplyMessage(port, &reply.ReplyHeader, sizeof(reply));
+            if (!SUCCEEDED(hr)) {
+
+                cout << "FilterReplyMessage failed." << endl;
+                return;
+            }
+
+        }
+    });
+}
+#endif
+
+void exec_apiurl(autocomplete::ACState& s);
+void exec_login(autocomplete::ACState& s);
+void exec_begin(autocomplete::ACState& s);
+void exec_signup(autocomplete::ACState& s);
+void exec_confirm(autocomplete::ACState& s);
+void exec_session(autocomplete::ACState& s);
+void exec_mount(autocomplete::ACState& s);
+void exec_ls(autocomplete::ACState& s);
+void exec_cd(autocomplete::ACState& s);
+void exec_pwd(autocomplete::ACState& s);
+void exec_lcd(autocomplete::ACState& s);
+void exec_lls(autocomplete::ACState& s);
+void exec_lpwd(autocomplete::ACState& s);
+void exec_lmkdir(autocomplete::ACState& s);
+void exec_import(autocomplete::ACState& s);
+void exec_open(autocomplete::ACState& s);
+void exec_put(autocomplete::ACState& s);
+void exec_putq(autocomplete::ACState& s);
+void exec_get(autocomplete::ACState& s);
+void exec_getq(autocomplete::ACState& s);
+void exec_pause(autocomplete::ACState& s);
+void exec_getfa(autocomplete::ACState& s);
+void exec_mediainfo(autocomplete::ACState& s);
+void exec_mkdir(autocomplete::ACState& s);
+void exec_rm(autocomplete::ACState& s);
+void exec_mv(autocomplete::ACState& s);
+void exec_cp(autocomplete::ACState& s);
+void exec_du(autocomplete::ACState& s);
+void exec_sync(autocomplete::ACState& s);
+void exec_export(autocomplete::ACState& s);
+void exec_share(autocomplete::ACState& s);
+void exec_invite(autocomplete::ACState& s);
+void exec_clink(autocomplete::ACState& s);
+void exec_ipc(autocomplete::ACState& s);
+void exec_showpcr(autocomplete::ACState& s);
+void exec_users(autocomplete::ACState& s);
+void exec_getua(autocomplete::ACState& s);
+void exec_putua(autocomplete::ACState& s);
+void exec_delua(autocomplete::ACState& s);
+void exec_alerts(autocomplete::ACState& s);
+void exec_recentactions(autocomplete::ACState& s);
+void exec_recentnodes(autocomplete::ACState& s);
+void exec_putbps(autocomplete::ACState& s);
+void exec_killsession(autocomplete::ACState& s);
+void exec_whoami(autocomplete::ACState& s);
+void exec_passwd(autocomplete::ACState& s);
+void exec_reset(autocomplete::ACState& s);
+void exec_recover(autocomplete::ACState& s);
+void exec_cancel(autocomplete::ACState& s);
+void exec_email(autocomplete::ACState& s);
+void exec_retry(autocomplete::ACState& s);
+void exec_recon(autocomplete::ACState& s);
+void exec_reload(autocomplete::ACState& s);
+void exec_logout(autocomplete::ACState& s);
+void exec_locallogout(autocomplete::ACState& s);
+void exec_symlink(autocomplete::ACState& s);
+void exec_version(autocomplete::ACState& s);
+void exec_debug(autocomplete::ACState& s);
+void exec_clear(autocomplete::ACState& s);
+void exec_codepage(autocomplete::ACState& s);
+void exec_log(autocomplete::ACState& s);
+void exec_test(autocomplete::ACState& s);
+void exec_chats(autocomplete::ACState& s);
+void exec_chatc(autocomplete::ACState& s);
+void exec_chati(autocomplete::ACState& s);
+void exec_chatcp(autocomplete::ACState& s);
+void exec_chatr(autocomplete::ACState& s);
+void exec_chatu(autocomplete::ACState& s);
+void exec_chatup(autocomplete::ACState& s);
+void exec_chatpu(autocomplete::ACState& s);
+void exec_chatga(autocomplete::ACState& s);
+void exec_chatra(autocomplete::ACState& s);
+void exec_chatst(autocomplete::ACState& s);
+void exec_chata(autocomplete::ACState& s);
+void exec_chatl(autocomplete::ACState& s);
+void exec_chatsm(autocomplete::ACState& s);
+void exec_chatlu(autocomplete::ACState& s);
+void exec_chatlj(autocomplete::ACState& s);
+void exec_enabletransferresumption(autocomplete::ACState& s);
+void exec_setmaxdownloadspeed(autocomplete::ACState& s);
+void exec_setmaxuploadspeed(autocomplete::ACState& s);
+void exec_handles(autocomplete::ACState& s);
+void exec_httpsonly(autocomplete::ACState& s);
+void exec_mfac(autocomplete::ACState& s);
+void exec_mfae(autocomplete::ACState& s);
+void exec_mfad(autocomplete::ACState& s);
+void exec_autocomplete(autocomplete::ACState& s);
+void exec_history(autocomplete::ACState& s);
+void exec_help(autocomplete::ACState& s);
+void exec_quit(autocomplete::ACState& s);
+void exec_find(autocomplete::ACState& s);
+void exec_treecompare(autocomplete::ACState& s);
+void exec_querytransferquota(autocomplete::ACState& s);
 void exec_showattributes(autocomplete::ACState& s)
 {
     if (const Node* n = nodeFromRemotePath(s.words[1].s))
@@ -2809,6 +3024,7 @@ autocomplete::ACN autocompleteSyntax()
     p->Add(exec_clear, sequence(text("clear")));
     p->Add(exec_codepage, sequence(text("codepage"), opt(sequence(wholenumber(65001), opt(wholenumber(65001))))));
     p->Add(exec_log, sequence(text("log"), either(text("utf8"), text("utf16"), text("codepage")), localFSFile()));
+    p->Add(exec_connectminifilter, sequence(text("connectminifilter"), localFSFolder()));
 #endif
     p->Add(exec_test, sequence(text("test"), opt(param("data"))));
 #ifdef ENABLE_CHAT
@@ -2875,17 +3091,48 @@ autocomplete::ACN autocompleteSyntax()
 
 
 #ifdef USE_FILESYSTEM
-bool recursiveget(fs::path&& localpath, Node* n, bool folders, unsigned& queued)
+bool recursiveget(fs::path&& localpath, Node* n, bool folders, unsigned& queued, bool sparsefiles, DBTableTransactionCommitter& committer)
 {
     if (n->type == FILENODE)
     {
         if (!folders)
         {
-            auto f = new AppFileGet(n, UNDEF, NULL, -1, 0, NULL, NULL, localpath.u8string());
-            f->appxfer_it = appxferq[GET].insert(appxferq[GET].end(), f);
-            DBTableTransactionCommitter committer(client->tctable);
-            client->startxfer(GET, f, committer);
-            queued += 1;
+            if (sparsefiles)
+            {
+#ifdef WIN32
+                fs::path p = localpath / n->displayname();
+                HANDLE hFile = ::CreateFileW((const wchar_t*)p.u16string().c_str(), GENERIC_WRITE, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
+                if (hFile == INVALID_HANDLE_VALUE) return false;
+
+                DWORD dwTemp;
+                BOOL worked1 = DeviceIoControl(hFile, FSCTL_SET_SPARSE, NULL, 0, NULL, 0, &dwTemp, NULL);
+
+                //BOOL worked15 = SetFileValidData(hFile, n->size);
+                LARGE_INTEGER request, result;
+                request.QuadPart = n->size;
+                BOOL worked15 = SetFilePointerEx(hFile, request, &result, FILE_BEGIN);
+                BOOL worked16 = SetEndOfFile(hFile);
+
+                FILE_ZERO_DATA_INFORMATION fzdi;
+                fzdi.FileOffset.QuadPart = 0;
+                fzdi.BeyondFinalZero.QuadPart = n->size;
+                BOOL worked2 = DeviceIoControl(hFile, FSCTL_SET_ZERO_DATA, &fzdi, sizeof(fzdi), NULL, 0, &dwTemp, NULL);
+
+                CloseHandle(hFile);
+                if (!worked1 || !worked2)
+                {
+                    return false;
+                }
+                queued += 1;
+#endif
+            }
+            else
+            {
+                auto f = new AppFileGet(n, UNDEF, NULL, -1, 0, NULL, NULL, localpath.u8string());
+                f->appxfer_it = appxferq[GET].insert(appxferq[GET].end(), f);
+                client->startxfer(GET, f, committer);
+                queued += 1;
+            }
         }
     }
     else if (n->type == FOLDERNODE || n->type == ROOTNODE)
@@ -2906,7 +3153,7 @@ bool recursiveget(fs::path&& localpath, Node* n, bool folders, unsigned& queued)
         }
         for (node_list::iterator it = n->children.begin(); it != n->children.end(); it++)
         {
-            if (!recursiveget(std::move(newpath), *it, folders, queued))
+            if (!recursiveget(std::move(newpath), *it, folders, queued, sparsefiles, committer))
             {
                 return false;
             }
@@ -2996,6 +3243,12 @@ m_off_t pread_file_end = 0;
 // execute command
 static void process_line(char* l)
 {
+    if (!*l)
+    {
+        setprompt(prompt);
+        return;
+    }
+
     switch (prompt)
     {
     case LOGINTFA:
@@ -3584,6 +3837,7 @@ void exec_get(autocomplete::ACState& s)
 #ifdef USE_FILESYSTEM
         // recursive get.  create local folder structure first, then queue transfer of all files 
         bool foldersonly = s.extractflag("-foldersonly");
+        bool sparsefiles = s.extractflag("-sparse");
 
         if (!(n = nodebypath(s.words[1].s.c_str())))
         {
@@ -3597,13 +3851,14 @@ void exec_get(autocomplete::ACState& s)
         {
             unsigned queued = 0;
             cout << "creating folders: " << endl;
-            if (recursiveget(fs::current_path(), n, true, queued))
+            DBTableTransactionCommitter committer(client->tctable);
+            if (recursiveget(fs::current_path(), n, true, queued, sparsefiles, committer))
             {
                 if (!foldersonly)
                 {
-                    cout << "queueing files..." << endl;
-                    bool alldone = recursiveget(fs::current_path(), n, false, queued);
-                    cout << "queued " << queued << " files for download" << (!alldone ? " before failure" : "") << endl;
+                    cout << (sparsefiles ? "creating sparse placeholder files..." : "queueing files...") << endl;
+                    bool alldone = recursiveget(fs::current_path(), n, false, queued, sparsefiles, committer);
+                    cout << queued << (sparsefiles ? " placeholder files created" : " files queued for download") << (!alldone ? " before failure" : "") << endl;
                 }
             }
         }
@@ -4193,72 +4448,63 @@ void exec_login(autocomplete::ACState& s)
 {
     if (client->loggedin() == NOTLOGGEDIN)
     {
-        if (s.words.size() > 1)
+        if ((s.words.size() == 2 || s.words.size() == 3) && s.words[1].s == "autoresume")
         {
-            if ((s.words.size() == 2 || s.words.size() == 3) && s.words[1].s == "autoresume")
+            string filename = "megacli_autoresume_session" + (s.words.size() == 3 ? "_" + s.words[2].s : "");
+            ifstream file(filename.c_str());
+            string session;
+            file >> session;
+            if (file.is_open() && session.size())
             {
-                string filename = "megacli_autoresume_session" + (s.words.size() == 3 ? "_" + s.words[2].s : "");
-                ifstream file(filename.c_str());
-                string session;
-                file >> session;
-                if (file.is_open() && session.size())
+                byte sessionraw[64];
+                if (session.size() < sizeof sessionraw * 4 / 3)
                 {
-                    byte sessionraw[64];
-                    if (session.size() < sizeof sessionraw * 4 / 3)
-                    {
-                        int size = Base64::atob(session.c_str(), sessionraw, sizeof sessionraw);
+                    int size = Base64::atob(session.c_str(), sessionraw, sizeof sessionraw);
 
-                        cout << "Resuming session..." << endl;
-                        return client->login(sessionraw, size);
-                    }
+                    cout << "Resuming session..." << endl;
+                    return client->login(sessionraw, size);
                 }
-                cout << "Failed to get a valid session id from file " << filename << endl;
             }
-            else if (strchr(s.words[1].s.c_str(), '@'))
+            cout << "Failed to get a valid session id from file " << filename << endl;
+        }
+        else if (strchr(s.words[1].s.c_str(), '@'))
+        {
+            login.reset();
+            login.email = s.words[1].s;
+
+            // full account login
+            if (s.words.size() > 2)
             {
-                login.reset();
-                login.email = s.words[1].s;
-
-                // full account login
-                if (s.words.size() > 2)
-                {
-                    login.password = s.words[2].s;
-                    cout << "Initiated login attempt..." << endl;
-                }
-                client->prelogin(login.email.c_str());
+                login.password = s.words[2].s;
+                cout << "Initiated login attempt..." << endl;
             }
-            else
-            {
-                const char* ptr;
-                if ((ptr = strchr(s.words[1].s.c_str(), '#')))  // folder link indicator
-                {
-                    return client->app->login_result(client->folderaccess(s.words[1].s.c_str()));
-                }
-                else
-                {
-                    byte session[64];
-                    int size;
-
-                    if (s.words[1].s.size() < sizeof session * 4 / 3)
-                    {
-                        size = Base64::atob(s.words[1].s.c_str(), session, sizeof session);
-
-                        cout << "Resuming session..." << endl;
-
-                        return client->login(session, size);
-                    }
-                }
-
-                cout << "Invalid argument. Please specify a valid e-mail address, "
-                    << "a folder link containing the folder key "
-                    << "or a valid session." << endl;
-            }
+            client->prelogin(login.email.c_str());
         }
         else
         {
-            cout << "      login email [password]" << endl
-                << "      login exportedfolderurl#key" << endl
-                << "      login session" << endl;
+            const char* ptr;
+            if ((ptr = strchr(s.words[1].s.c_str(), '#')))  // folder link indicator
+            {
+                return client->app->login_result(client->folderaccess(s.words[1].s.c_str()));
+            }
+            else
+            {
+                byte session[64];
+                int size;
+
+                if (s.words[1].s.size() < sizeof session * 4 / 3)
+                {
+                    size = Base64::atob(s.words[1].s.c_str(), session, sizeof session);
+
+                    cout << "Resuming session..." << endl;
+
+                    return client->login(session, size);
+                }
+            }
+
+            cout << "Invalid argument. Please specify a valid e-mail address, "
+                << "a folder link containing the folder key "
+                << "or a valid session." << endl;
         }
     }
     else
@@ -7584,10 +7830,7 @@ void megacli()
         if (line)
         {
             // execute user command
-            if (*line)
-            {
-                process_line(line);
-            }
+            process_line(line);
             free(line);
             line = NULL;
 

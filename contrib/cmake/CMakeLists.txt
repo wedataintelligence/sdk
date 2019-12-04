@@ -699,10 +699,10 @@ configure_file("${MegaDir}/logo.png" logo.png COPYONLY)
 # actual apps
 
 add_executable(megacli ${MegaDir}/examples/megacli.cpp)
-target_link_libraries(megacli Mega)
-if (NOT NO_READLINE)
-    target_link_libraries(megacli readline)
-endif (NOT NO_READLINE)
+target_link_libraries(megacli Mega $<$<NOT:${NO_READLINE}>:readline>)
+if (WIN32)
+    target_link_libraries(megacli Mega FltLib.lib )
+endif()
 
 add_executable(megasimplesync ${MegaDir}/examples/megasimplesync.cpp)
 target_link_libraries(megasimplesync Mega )
