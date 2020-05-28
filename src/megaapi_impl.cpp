@@ -1213,52 +1213,6 @@ string MegaNodePrivate::getLocalPath()
     return localPath;
 }
 
-
-bool WildcardMatch(const char *pszString, const char *pszMatch)
-//  cf. http://www.planet-source-code.com/vb/scripts/ShowCode.asp?txtCodeId=1680&lngWId=3
-{
-    const char *cp = nullptr;
-    const char *mp = nullptr;
-
-    while ((*pszString) && (*pszMatch != '*'))
-    {
-        if ((*pszMatch != *pszString) && (*pszMatch != '?'))
-        {
-            return false;
-        }
-        pszMatch++;
-        pszString++;
-    }
-
-    while (*pszString)
-    {
-        if (*pszMatch == '*')
-        {
-            if (!*++pszMatch)
-            {
-                return true;
-            }
-            mp = pszMatch;
-            cp = pszString + 1;
-        }
-        else if ((*pszMatch == *pszString) || (*pszMatch == '?'))
-        {
-            pszMatch++;
-            pszString++;
-        }
-        else
-        {
-            pszMatch = mp;
-            pszString = cp++;
-        }
-    }
-    while (*pszMatch == '*')
-    {
-        pszMatch++;
-    }
-    return !*pszMatch;
-}
-
 bool MegaApiImpl::is_syncable(Sync *sync, const char *name, const LocalPath& localpath)
 {
     // Don't sync these system files from OS X
@@ -1267,12 +1221,9 @@ bool MegaApiImpl::is_syncable(Sync *sync, const char *name, const LocalPath& loc
         return false;
     }
 
-    for (unsigned int i = 0; i < excludedNames.size(); i++)
+    if (wildcardMatch(name, excludedNames))
     {
-        if (WildcardMatch(name, excludedNames[i].c_str()))
-        {
-            return false;
-        }
+        return false;
     }
 
     MegaRegExp *regExp = NULL;
@@ -1290,12 +1241,9 @@ bool MegaApiImpl::is_syncable(Sync *sync, const char *name, const LocalPath& loc
     {
         string utf8path = localpath.toPath(*fsAccess);
 
-        for (unsigned int i = 0; i < excludedPaths.size(); i++)
+        if (wildcardMatch(utf8path.c_str(), excludedPaths))
         {
-            if (WildcardMatch(utf8path.c_str(), excludedPaths[i].c_str()))
-            {
-                return false;
-            }
+            return false;
         }
 
 #ifdef USE_PCRE
