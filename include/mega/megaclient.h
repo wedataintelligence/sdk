@@ -501,6 +501,12 @@ public:
     bool xferpaused[2];
 
 #ifdef ENABLE_SYNC
+    void purgeFilterState();
+
+    void restoreFilterState();
+
+    void updateFilterState();
+
     // active syncs
     sync_list syncs;
 
@@ -513,6 +519,8 @@ public:
     // keep sync configuration after logout
     bool mKeepSyncsAfterLogout = false;
 
+    // whether we load ignore files.
+    bool ignoreFilesEnabled = true;
 #endif
 
     // if set, symlinks will be followed except in recursive deletions
@@ -1408,6 +1416,9 @@ public:
 #ifdef ENABLE_SYNC
     // sync debris folder name in //bin
     static const char* const SYNCDEBRISFOLDERNAME;
+
+    // tracks which nodes failed to load their ignore file.
+    localnode_list ignoreFileFailures;
 
     // we are adding the //bin/SyncDebris/yyyy-mm-dd subfolder(s)
     bool syncdebrisadding;
