@@ -935,7 +935,8 @@ public:
     string accountauth;
 
     // file that is blocking the sync engine
-    LocalPath blockedfile;
+    void blockedFile(Sync& sync, const LocalPath& path);
+    const LocalPath& blockedFile() const;
 
     // stats id
     static std::string statsid;
@@ -978,6 +979,9 @@ private:
 
     // if logged into writable folder
     bool mLoggedIntoWritableFolder = false;
+
+    // file that is blocking the sync engine
+    LocalPath blockedfile;
 
     // badhost report
     HttpReq* badhostcs;

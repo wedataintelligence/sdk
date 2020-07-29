@@ -288,6 +288,7 @@ struct MEGA_API MegaApp
     virtual void transfer_complete(Transfer*) { }
 
     // sync status updates and events
+    virtual void syncupdate_blocked_file(Sync&, const LocalPath&) { }
     virtual void syncupdate_filter_error(Sync*, LocalNode*) { }
     virtual void syncupdate_state(int tag, syncstate_t, SyncError, bool = true) { }
     virtual void syncupdate_scanning(bool) { }

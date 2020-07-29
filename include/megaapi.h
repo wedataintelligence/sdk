@@ -5004,6 +5004,7 @@ public:
         TYPE_REMOTE_RENAME,
         TYPE_FILE_GET,
         TYPE_FILE_PUT,
+        TYPE_BLOCKED_FILE,
         TYPE_FILTER_ERROR
     };
 
