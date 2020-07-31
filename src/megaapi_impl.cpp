@@ -19432,6 +19432,14 @@ void MegaApiImpl::sendPendingRequests()
                 break;
             }
 
+            if (type == ATTR_FIRSTNAME)
+            {
+                LOG_debug << "\n<fullname debug> Set ATTR_FIRSTNAME" << value;
+            }
+            else if (type == ATTR_LASTNAME)
+            {
+                LOG_debug << "\n<fullname debug>Set ATTR_LASTNAME" << value;
+            }
             string attrvalue;
 
             if (type == ATTR_KEYRING                ||
