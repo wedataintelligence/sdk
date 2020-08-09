@@ -2255,6 +2255,95 @@ GTEST_TEST(Sync, BasicSync_MoveLocalFolderBetweenSyncs)
 
 
 
+GTEST_TEST(Sync, TwoWaySync)
+{
+    // create local test root folder (delete old instance if present, and recreate)
+    fs::path localtestroot = makeNewTestRoot(LOCAL_TEST_FOLDER);
+
+    // setup clients with their own base folder
+    StandardClient clientA1(localtestroot, "clientA1");   // local base folder: LOCAL_TEST_FOLDER/clientA1/
+    StandardClient clientA2(localtestroot, "clientA2");   // local base folder: LOCAL_TEST_FOLDER/clientA2/
+
+    // enable live logging
+    clientA1.logcb = clientA2.logcb = true;
+
+    // Use clientA1 to setup remote base folder as /mega_test_sync/
+    // then explicitly create remote folder /mega_test_sync/remoteSynced/
+    ASSERT_TRUE(clientA1.login_reset_makeremotenodes("MEGA_EMAIL", "MEGA_PWD", "remoteSynced"));
+
+    // make clientA2 aware of the remote folder structure
+    ASSERT_TRUE(clientA2.login_fetchnodes("MEGA_EMAIL", "MEGA_PWD"));
+
+    // setup client A1 to sync contents of LOCAL_TEST_FOLDER/clientA1/localSynced1/ with remote /mega_test_sync/remoteSynced/;
+    // this will also create sub-folder localSynced1
+    ASSERT_TRUE(clientA1.setupSync_mainthread("localSynced1", "remoteSynced", 1));
+    // setup client A1 to sync contents of LOCAL_TEST_FOLDER/clientA2/localSynced2/ with the same remote folder
+    ASSERT_TRUE(clientA2.setupSync_mainthread("localSynced2", "remoteSynced", 2));
+
+    // wait for the sync to be performed
+    waitonsyncs(std::chrono::seconds(4), &clientA1, &clientA2);
+
+    // setup a model of the folder structure, to compare with the actual remote and local structures
+    Model model;
+    model.root->addkid(model.makeModelSubfolder("remoteSynced"));
+
+    // compare expected folder structure with the synced remote AND local folders of client A1
+    ASSERT_TRUE(clientA1.confirmModel_mainthread(model.findnode("remoteSynced"), 1));
+    // compare expected folder structure with the synced remote AND local folder of client A2
+    ASSERT_TRUE(clientA2.confirmModel_mainthread(model.findnode("remoteSynced"), 2));
+
+
+    // create new local folder
+    //==========================
+    ASSERT_TRUE(fs::create_directory(clientA1.syncSet[1].localpath / "newFolder"));
+    // wait for the sync to be performed
+    waitonsyncs(std::chrono::seconds(4), &clientA1, &clientA2);
+
+    // update the expected folder structure with the latest changes
+    model.findnode("remoteSynced")->addkid(model.makeModelSubfolder("newFolder"));
+    // compare expected folder structure with the synced remote AND local folders of client A1
+    ASSERT_TRUE(clientA1.confirmModel_mainthread(model.findnode("remoteSynced"), 1));
+    // compare expected folder structure with the synced remote AND local folder of client A2
+    ASSERT_TRUE(clientA2.confirmModel_mainthread(model.findnode("remoteSynced"), 2));
+
+
+    // move local folder out of sync
+    //===============================
+    error_code rename_error;
+    fs::path path1 = clientA1.syncSet[1].localpath / "newFolder";
+//	fs::rename(path1, clientA1., rename_error);
+//	ASSERT_TRUE(!rename_error) << rename_error;
+
+
+    // rename local folder
+    //==========================
+    fs::path path2 = clientA1.syncSet[1].localpath / "renamedFolder";
+    fs::rename(path1, path2, rename_error);
+    ASSERT_TRUE(!rename_error) << rename_error;
+
+    waitonsyncs(std::chrono::seconds(4), &clientA1, &clientA2);
+
+    // check everything matches (model has expected state of remote and local)
+    model.emulate_rename("remoteSynced/newFolder", "renamedFolder");
+    ASSERT_TRUE(clientA1.confirmModel_mainthread(model.findnode("remoteSynced"), 1));
+    ASSERT_TRUE(clientA2.confirmModel_mainthread(model.findnode("remoteSynced"), 2));
+
+
+    // remove local folder
+    //==========================
+    fs::remove(path2, rename_error);
+    ASSERT_TRUE(!rename_error) << rename_error;
+
+    waitonsyncs(std::chrono::seconds(4), &clientA1, &clientA2);
+
+    // check everything matches (model has expected state of remote and local)
+    model.emulate_delete("remoteSynced/renamedFolder");
+    ASSERT_TRUE(clientA1.confirmModel_mainthread(model.findnode("remoteSynced"), 1));
+    ASSERT_TRUE(clientA2.confirmModel_mainthread(model.findnode("remoteSynced"), 2, true));
+}
+
+
+
 GTEST_TEST(Sync, BasicSync_AddLocalFolder)
 {
     // confirm change is synced to remote, and also seen and applied in a second client that syncs the same folder
@@ -4386,7 +4475,7 @@ TEST(Sync, OneWay_Download_syncDelTrue_overwriteTrue_1)
 }
 
 
-struct OneWaySymmetryCase
+struct TwoWaySymmetryCase
 {
     enum Action { action_rename, action_moveWithinSync, action_moveOutOfSync, action_moveIntoSync, action_delete, action_numactions };
     
@@ -4415,15 +4504,15 @@ struct OneWaySymmetryCase
         StandardClient& client;
         StandardClient& nonsyncClient;
         fs::path localBaseFolder;
-        std::string remoteBaseFolder = "oneway";   // leave out initial / so we can drill down from root node
+        std::string remoteBaseFolder;   // leave out initial / so we can drill down from root node
         int next_sync_tag = 100;
         std::string first_test_name;
 
-        State(StandardClient& sc, StandardClient& sc2) : client(sc), nonsyncClient(sc2) {}
+        State(const string& baseFolder, StandardClient& sc, StandardClient& sc2) : remoteBaseFolder(baseFolder), client(sc), nonsyncClient(sc2) {}
     };
 
     State& state;
-    OneWaySymmetryCase(State& wholestate) : state(wholestate) {}
+    TwoWaySymmetryCase(State& wholestate) : state(wholestate) {}
 
     // todo: remote changes made by client (of this sync) or other client
 
@@ -4534,7 +4623,7 @@ struct OneWaySymmetryCase
 
     }
 
-    void SetupOneWaySync()
+    void SetupSync()
     {
         string localname, syncrootpath((localTestBasePath / "f").u8string());
         state.client.client.fsaccess->path2local(&syncrootpath, &localname);
@@ -4543,20 +4632,20 @@ struct OneWaySymmetryCase
         Node* n = state.client.drillchildnodebyname(testRoot, remoteTestBasePath + "/f");
         ASSERT_TRUE(!!n);
 
-        SyncConfig config(syncrootpath, n->nodehandle, 0, {}, (up ? SyncConfig::TYPE_UP : SyncConfig::TYPE_DOWN), propagateDeletes, forceOverwrites);
+        SyncConfig config(syncrootpath, n->nodehandle, 0, {}, GetSyncType(), propagateDeletes, forceOverwrites);
         bool syncsetup = state.client.setupSync_mainthread(std::move(config),
                                                            syncrootpath.erase(0, state.client.fsBasePath.u8string().size()+1),  remoteTestBasePath + "/f", sync_tag = ++state.next_sync_tag);
         ASSERT_TRUE(syncsetup);
     }
 
-    void PauseOneWaySync()
+    void PauseSync()
     {
         state.client.delSync_mainthread(sync_tag, true);
     }
 
-    void ResumeOneWaySync()
+    void ResumeSync()
     {
-        SetupOneWaySync();
+        SetupSync();
     }
 
     void remote_rename(std::string nodepath, std::string newname, bool updatemodel, bool reportaction, bool deleteTargetFirst)
@@ -4864,7 +4953,7 @@ struct OneWaySymmetryCase
         cout << "File may differ: " << p << endl;
     }
 
-    // One-way sync has been started and is stable.  Now perform the test action
+    // Sync has been started and is stable.  Now perform the test action
 
     enum ModifyStage { Prepare, MainAction };
 
@@ -5001,7 +5090,7 @@ struct OneWaySymmetryCase
                     }
                     else if (forceOverwrites || destinationMatchAfter != match_newer)
                     {
-                        // we don't imitiate the move, but the one-way will upload/download the file from the source
+                        // we don't imitiate the move, but the sync will upload/download the file from the source
                         destinationModel().emulate_rename_copy("f/original", "f/f_0", "file0_f_1");
                     }
                 }
@@ -5141,7 +5230,7 @@ struct OneWaySymmetryCase
             }
         }
 
-        if (!initial) cout << "Checking setup state (should be no changes in oneway sync source): "<< name() << endl;
+        if (!initial) cout << "Checking setup state (should be no changes in sync source): "<< name() << endl;
 
         // confirm source is unchanged after setup  (one-way is not sending changes to the wrong side)
         bool localfs = state.client.confirmModel(sync_tag, localModel.findnode("f"), StandardClient::CONFIRM_LOCALFS, true); // todo: later enable debris checks
@@ -5153,7 +5242,7 @@ struct OneWaySymmetryCase
     }
 
 
-    // One-way sync is stable again after the change.  Check the results.
+    // Sync is stable again after the change.  Check the results.
     bool finalResult = false;
     void CheckResult(State&)
     {
@@ -5171,7 +5260,7 @@ struct OneWaySymmetryCase
             PrintModelTree(destinationModel().findnode("f"));
         }
 
-        cout << "Checking oneway sync "<< name() << endl;
+        cout << "Checking sync "<< name() << endl;
         bool localfs = state.client.confirmModel(sync_tag, localModel.findnode("f"), StandardClient::CONFIRM_LOCALFS, true); // todo: later enable debris checks
         bool localnode = state.client.confirmModel(sync_tag, localModel.findnode("f"), StandardClient::CONFIRM_LOCALNODE, true); // todo: later enable debris checks
         bool remote = state.client.confirmModel(sync_tag, remoteModel.findnode("f"), StandardClient::CONFIRM_REMOTE, true); // todo: later enable debris checks
@@ -5180,7 +5269,29 @@ struct OneWaySymmetryCase
         EXPECT_TRUE(localfs && localnode && remote) << " failed in " << name();
         finalResult = localfs && localnode && remote;
     }
+
+
+private:
+    virtual SyncConfig::Type GetSyncType() const
+    {
+        return SyncConfig::TYPE_TWOWAY;
+    }
 };
+
+
+
+struct OneWaySymmetryCase : public TwoWaySymmetryCase
+{
+    OneWaySymmetryCase(State& wholestate) : TwoWaySymmetryCase(wholestate) {}
+
+private:
+    SyncConfig::Type GetSyncType() const override
+    {
+        return up ? SyncConfig::TYPE_UP : SyncConfig::TYPE_DOWN;
+    }
+};
+
+
 
 void CatchupClients(StandardClient& c1, StandardClient& c2)
 {
@@ -5192,34 +5303,37 @@ void CatchupClients(StandardClient& c1, StandardClient& c2)
     cout << "Caught up" << endl;
 }
 
-TEST(Sync, OneWay_Highlevel_Symmetries)
+
+
+template<class T>
+void Run_Highlevel_Symetries(const string& baseFolder, const string& syncDescription)
 {
     // confirm change is synced to remote, and also seen and applied in a second client that syncs the same folder
     fs::path localtestroot = makeNewTestRoot(LOCAL_TEST_FOLDER);
     
     StandardClient clientA1(localtestroot, "clientA1");   
     StandardClient clientA2(localtestroot, "clientA2");   
-    ASSERT_TRUE(clientA1.login_reset_makeremotenodes("MEGA_EMAIL", "MEGA_PWD", "oneway", 0, 0));
+    ASSERT_TRUE(clientA1.login_reset_makeremotenodes("MEGA_EMAIL", "MEGA_PWD", baseFolder, 0, 0));
     ASSERT_TRUE(clientA2.login_fetchnodes("MEGA_EMAIL", "MEGA_PWD"));
-    fs::create_directory(clientA1.fsBasePath / fs::u8path("oneway"));
-    fs::create_directory(clientA2.fsBasePath / fs::u8path("oneway"));
+    fs::create_directory(clientA1.fsBasePath / fs::u8path(baseFolder));
+    fs::create_directory(clientA2.fsBasePath / fs::u8path(baseFolder));
 
-    OneWaySymmetryCase::State allstate(clientA1, clientA2);
-    allstate.localBaseFolder = clientA1.fsBasePath / fs::u8path("oneway");
+    T::State allstate(baseFolder, clientA1, clientA2);
+    allstate.localBaseFolder = clientA1.fsBasePath / fs::u8path(baseFolder);
 
-    std::map<std::string, OneWaySymmetryCase> cases;
+    std::map<std::string, T> cases;
 
     static bool singleCase = false;
     static string singleNamedTest = "move_other_down_file_beforenewer_afterabsent_pd_fo";//"rename_other_down_file_beforemismatch_afterabsent"; 
     if (singleCase)
     {
-        OneWaySymmetryCase testcase(allstate);
+        T testcase(allstate);
         testcase.selfChange = false;
         testcase.up = false;
-        testcase.action = OneWaySymmetryCase::action_rename;
+        testcase.action = T::action_rename;
         testcase.file = false;
-        testcase.destinationMatchBefore = OneWaySymmetryCase::match_exact;
-        testcase.destinationMatchAfter = OneWaySymmetryCase::match_absent;
+        testcase.destinationMatchBefore = T::match_exact;
+        testcase.destinationMatchAfter = T::match_exact;// match_absent;
         testcase.propagateDeletes = false;
         testcase.forceOverwrites = false;
         testcase.pauseDuringAction = true;
@@ -5232,7 +5346,7 @@ TEST(Sync, OneWay_Highlevel_Symmetries)
 
         for (int up = 0; up < 2; ++up)
         {
-            for (int action = (int)OneWaySymmetryCase::action_rename; action < (int)OneWaySymmetryCase::action_numactions; ++action)
+            for (int action = (int)T::action_rename; action < (int)T::action_numactions; ++action)
             {
                 for (int file = 1; file < 2; ++file)
                 {
@@ -5242,9 +5356,9 @@ TEST(Sync, OneWay_Highlevel_Symmetries)
                     {
                         for (int destinationMatchAfter = 0; destinationMatchAfter < 4; ++destinationMatchAfter)
                         {
-                            //if (!(destinationMatchBefore == OneWaySymmetryCase::match_exact && destinationMatchAfter == OneWaySymmetryCase::match_absent)) continue;
+                            //if (!(destinationMatchBefore == T::match_exact && destinationMatchAfter == T::match_absent)) continue;
 
-                            if (action == OneWaySymmetryCase::action_delete && destinationMatchAfter > 0) continue;  // only before matters for delete since there's only one path involved
+                            if (action == T::action_delete && destinationMatchAfter > 0) continue;  // only before matters for delete since there's only one path involved
 
                             for (int propagateDeletes = 0; propagateDeletes < 2; ++propagateDeletes)
                             {
@@ -5258,16 +5372,16 @@ TEST(Sync, OneWay_Highlevel_Symmetries)
                                     {
                                         if (pauseDuringAction) continue;
 
-                                        if (forceOverwrites && destinationMatchBefore == OneWaySymmetryCase::match_older) continue;  // the sync would overwrite the setup
+                                        if (forceOverwrites && destinationMatchBefore == T::match_older) continue;  // the sync would overwrite the setup
 
 
-                                        OneWaySymmetryCase testcase(allstate);
+                                        T testcase(allstate);
                                         testcase.selfChange = selfChange != 0;
                                         testcase.up = up;
-                                        testcase.action = OneWaySymmetryCase::Action(action);
+                                        testcase.action = T::Action(action);
                                         testcase.file = file;
-                                        testcase.destinationMatchBefore = OneWaySymmetryCase::MatchState(destinationMatchBefore);
-                                        testcase.destinationMatchAfter = OneWaySymmetryCase::MatchState(destinationMatchAfter);
+                                        testcase.destinationMatchBefore = T::MatchState(destinationMatchBefore);
+                                        testcase.destinationMatchAfter = T::MatchState(destinationMatchAfter);
                                         testcase.propagateDeletes = propagateDeletes;
                                         testcase.forceOverwrites = forceOverwrites;
                                         testcase.pauseDuringAction = pauseDuringAction;
@@ -5289,14 +5403,14 @@ TEST(Sync, OneWay_Highlevel_Symmetries)
     }
 
 
-    cout << "Creating initial local files/folders for " << cases.size() << " one-way sync test cases" << endl;
+    cout << "Creating initial local files/folders for " << cases.size() << " " << syncDescription << " sync test cases" << endl;
     for (auto& testcase : cases)
     {
         testcase.second.SetupForSync();
     }
 
     // set up sync for A1, it should build matching cloud files/folders as the test cases add local files/folders
-    ASSERT_TRUE(clientA1.setupSync_mainthread("oneway", "oneway", 1));
+    ASSERT_TRUE(clientA1.setupSync_mainthread(baseFolder, baseFolder, 1));
     assert(allstate.localBaseFolder == clientA1.syncSet[1].localpath);
 
     cout << "Full-sync all test folders to the cloud for setup" << endl;
@@ -5308,13 +5422,13 @@ TEST(Sync, OneWay_Highlevel_Symmetries)
     future<bool> fb = clientA1.thread_do([](StandardClient& sc, promise<bool>& pb) { sc.client.delsync(sc.syncByTag(1), true); pb.set_value(true); });
     ASSERT_TRUE(waitonresults(&fb));
 
-    cout << "Setting up each sub-test's one-way sync of 'f'" << endl;
+    cout << "Setting up each sub-test's " << syncDescription << " sync of 'f'" << endl;
     for (auto& testcase : cases)
     {
-        testcase.second.SetupOneWaySync();
+        testcase.second.SetupSync();
     }
 
-    cout << "Letting all " << cases.size() << " one-way syncs run" << endl;
+    cout << "Letting all " << cases.size() << " " << syncDescription << " syncs run" << endl;
     WaitMillisec(10000);
 
     CatchupClients(clientA1, clientA2);
@@ -5329,15 +5443,15 @@ TEST(Sync, OneWay_Highlevel_Symmetries)
     // make changes in destination to set up test
     for (auto& testcase : cases)
     {
-        testcase.second.Modify(OneWaySymmetryCase::Prepare);
+        testcase.second.Modify(T::Prepare);
     }
 
     CatchupClients(clientA1, clientA2);
 
-    cout << "Letting all " << cases.size() << " one-way syncs run" << endl;
+    cout << "Letting all " << cases.size() << " " << syncDescription << " syncs run" << endl;
     waitonsyncs(5s, &clientA1, &clientA2);
 
-    cout << "Checking one-way source is unchanged" << endl;
+    cout << "Checking " << syncDescription << " source is unchanged" << endl;
     for (auto& testcase : cases)
     {
         testcase.second.CheckSetup(allstate, false);
@@ -5348,20 +5462,20 @@ TEST(Sync, OneWay_Highlevel_Symmetries)
     {
         if (testcase.second.pauseDuringAction)
         {
-            testcase.second.PauseOneWaySync();
+            testcase.second.PauseSync();
             ++paused;
         }
     }
     if (paused)
     {
-        cout << "Paused " << paused << " one-way syncs" << endl;
+        cout << "Paused " << paused << " " << syncDescription << " syncs" << endl;
         WaitMillisec(1000);
     }
 
     cout << "Performing action " << endl;
     for (auto& testcase : cases)
     {
-        testcase.second.Modify(OneWaySymmetryCase::MainAction);
+        testcase.second.Modify(T::MainAction);
     }
     waitonsyncs(5s, &clientA1, &clientA2);
     CatchupClients(clientA1, clientA2);
@@ -5371,18 +5485,18 @@ TEST(Sync, OneWay_Highlevel_Symmetries)
     {
         if (testcase.second.pauseDuringAction)
         {
-            testcase.second.ResumeOneWaySync();
+            testcase.second.ResumeSync();
             ++resumed;
         }
     }
     if (resumed)
     {
-        cout << "Resumed " << resumed << " one-way syncs" << endl;
+        cout << "Resumed " << resumed << " " << syncDescription << " syncs" << endl;
         WaitMillisec(3000);
     }
 
 
-    cout << "Letting all " << cases.size() << " one-way syncs run" << endl;
+    cout << "Letting all " << cases.size() << " " << syncDescription << " syncs run" << endl;
     
     waitonsyncs(5s, &clientA1, &clientA2);
 
@@ -5406,5 +5520,20 @@ TEST(Sync, OneWay_Highlevel_Symmetries)
     }
     cout << "Succeeded: " << succeeded << " Failed: " << failed << endl;
 }
+
+
+
+TEST(Sync, DISABLED_OneWay_Highlevel_Symmetries)
+{
+    Run_Highlevel_Symetries<OneWaySymmetryCase>("oneway", "one-way");
+}
+
+
+
+TEST(Sync, TwoWay_Highlevel_Symmetries)
+{
+    Run_Highlevel_Symetries<TwoWaySymmetryCase>("twoway", "two-way");
+}
+
 
 #endif
