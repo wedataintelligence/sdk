@@ -2254,7 +2254,7 @@ GTEST_TEST(Sync, BasicSync_MoveLocalFolderBetweenSyncs)
 }
 
 
-
+#if 0  // just delete this if TwoWay_Highlevel_Symmetries will be used
 GTEST_TEST(Sync, TwoWaySync)
 {
     // create local test root folder (delete old instance if present, and recreate)
@@ -2341,7 +2341,7 @@ GTEST_TEST(Sync, TwoWaySync)
     ASSERT_TRUE(clientA1.confirmModel_mainthread(model.findnode("remoteSynced"), 1));
     ASSERT_TRUE(clientA2.confirmModel_mainthread(model.findnode("remoteSynced"), 2, true));
 }
-
+#endif
 
 
 GTEST_TEST(Sync, BasicSync_AddLocalFolder)
@@ -5305,8 +5305,10 @@ void CatchupClients(StandardClient& c1, StandardClient& c2)
 
 
 
+enum class ChangeType { LOCAL, REMOTE };
+
 template<class T>
-void Run_Highlevel_Symetries(const string& baseFolder, const string& syncDescription)
+void Run_Highlevel_Symetries(const string& baseFolder, const string& syncDescription, ChangeType change)
 {
     // confirm change is synced to remote, and also seen and applied in a second client that syncs the same folder
     fs::path localtestroot = makeNewTestRoot(LOCAL_TEST_FOLDER);
@@ -5329,7 +5331,7 @@ void Run_Highlevel_Symetries(const string& baseFolder, const string& syncDescrip
     {
         T testcase(allstate);
         testcase.selfChange = false;
-        testcase.up = false;
+        testcase.up = change == ChangeType::LOCAL;
         testcase.action = T::action_rename;
         testcase.file = false;
         testcase.destinationMatchBefore = T::match_exact;
@@ -5377,7 +5379,7 @@ void Run_Highlevel_Symetries(const string& baseFolder, const string& syncDescrip
 
                                         T testcase(allstate);
                                         testcase.selfChange = selfChange != 0;
-                                        testcase.up = up;
+                                        testcase.up = change == ChangeType::LOCAL;
                                         testcase.action = T::Action(action);
                                         testcase.file = file;
                                         testcase.destinationMatchBefore = T::MatchState(destinationMatchBefore);
@@ -5418,6 +5420,7 @@ void Run_Highlevel_Symetries(const string& baseFolder, const string& syncDescrip
     CatchupClients(clientA1, clientA2);
     waitonsyncs(20s, &clientA1);
 
+    // TODO: make this conditional, only for on-way
     cout << "Stopping full-sync" << endl;
     future<bool> fb = clientA1.thread_do([](StandardClient& sc, promise<bool>& pb) { sc.client.delsync(sc.syncByTag(1), true); pb.set_value(true); });
     ASSERT_TRUE(waitonresults(&fb));
@@ -5525,14 +5528,15 @@ void Run_Highlevel_Symetries(const string& baseFolder, const string& syncDescrip
 
 TEST(Sync, DISABLED_OneWay_Highlevel_Symmetries)
 {
-    Run_Highlevel_Symetries<OneWaySymmetryCase>("oneway", "one-way");
+    Run_Highlevel_Symetries<OneWaySymmetryCase>("oneway", "one-way", ChangeType::REMOTE);
 }
 
 
 
 TEST(Sync, TwoWay_Highlevel_Symmetries)
 {
-    Run_Highlevel_Symetries<TwoWaySymmetryCase>("twoway", "two-way");
+    Run_Highlevel_Symetries<TwoWaySymmetryCase>("twoway", "two-way", ChangeType::REMOTE);
+//    Run_Highlevel_Symetries<TwoWaySymmetryCase>("twoway", "two-way", ChangeType::LOCAL);
 }
 
 
