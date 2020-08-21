@@ -256,4 +256,29 @@ TEST(SpeedController, calculateMeanSpeedSmallBytesValue)
     EXPECT_EQ(speed, 0); // 4 bytes in 5 seconds is 0 bytes in 1 second
     EXPECT_EQ(speedController.getMeanSpeed(), 0); // mean of 1x100000 and 0
 }
+
+TEST(SpeedController, calculateSpeedPerformance)
+{
+    SpeedController speedController;
+    constexpr auto totalBytes(10);
+    constexpr auto totalCalculations(1e6);
+    Waiter::ds = 0;
+
+    const auto start{std::chrono::steady_clock::now()};
+    m_off_t speed;
+    for(int i=0; i<totalCalculations; i++)
+    {
+        speed = speedController.calculateSpeed(totalBytes);
+        Waiter::ds += 1;
+    }
+    const auto end{std::chrono::steady_clock::now()};
+
+    EXPECT_EQ(speed, 100);
+    EXPECT_EQ(speedController.getMeanSpeed(), 51);
+
+    const auto elapsed{end-start};
+    const auto micros{std::chrono::duration_cast<std::chrono::microseconds>(elapsed).count()/totalCalculations};
+    std::cout << "[          ] time micros = " << micros << std::endl;
+    // time micros = 0.045727 in a Intel® Core™ i7-9750H CPU @ 2.60GHz × 12
+}
 }
