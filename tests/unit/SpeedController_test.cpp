@@ -279,6 +279,7 @@ TEST(SpeedController, calculateSpeedPerformance)
     const auto elapsed{end-start};
     const auto micros{std::chrono::duration_cast<std::chrono::microseconds>(elapsed).count()/totalCalculations};
     std::cout << "[          ] time micros = " << micros << std::endl;
-    // time micros = 0.045727 in a Intel® Core™ i7-9750H CPU @ 2.60GHz × 12
+    // time micros = 0.045727 in a Intel® Core™ i7-9750H CPU @ 2.60GHz × 12 (Release)
+}
 }
 }

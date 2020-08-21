@@ -663,6 +663,7 @@ add_library(Mega STATIC
             ${MegaDir}/include/mega/posix/megawaiter.h
             ${MegaDir}/include/mega/mega_ccronexpr.h
             ${MegaDir}/include/mega/testhooks.h
+            ${MegaDir}/include/mega/timedcache.h
             ${MegaDir}/include/mega/share.h
             ${MegaDir}/include/mega/win32/megafs.h
             ${MegaDir}/include/mega/win32/meganet.h
@@ -737,6 +738,7 @@ add_library(Mega STATIC
             ${MegaDir}/src/sharenodekeys.cpp 
             ${MegaDir}/src/sync.cpp 
             ${MegaDir}/src/testhooks.cpp 
+            ${MegaDir}/src/timedcache.cpp
             ${MegaDir}/src/transfer.cpp 
             ${MegaDir}/src/transferslot.cpp 
             ${MegaDir}/src/treeproc.cpp 
@@ -868,6 +870,7 @@ add_executable(test_unit
     ${MegaDir}/tests/unit/SpeedController_test.cpp
     ${MegaDir}/tests/unit/Sync_test.cpp
     ${MegaDir}/tests/unit/TextChat_test.cpp
+    ${MegaDir}/tests/unit/TimedCache_test.cpp
     ${MegaDir}/tests/unit/Transfer_test.cpp
     ${MegaDir}/tests/unit/User_test.cpp
     ${MegaDir}/tests/unit/utils.cpp
