@@ -1,8 +1,14 @@
 #include "mega/timedcache.h"
 
-void TimedCache::addTimedValues(mega::dstime decisecondTimestamp, m_off_t values)
+void TimedCache::addTimedValues(uint32_t decisecondTimestamp, int64_t values)
 {
-    const auto timestampChanged{lastAddedTimestamp != decisecondTimestamp};
+    if(mTimedValues.empty())
+    {
+        mTimedValues[decisecondTimestamp] = values;
+        return;
+    }
+
+    const auto timestampChanged{mTimedValues.rbegin()->first != decisecondTimestamp};
     if(timestampChanged)
     {
         // add total count in last timeStamp bucket
@@ -17,12 +23,12 @@ void TimedCache::addTimedValues(mega::dstime decisecondTimestamp, m_off_t values
         // remove values outside the max window
         const auto initWindowTimestamp{decisecondTimestamp - mMaxWindowTimeDeciseconds};
         const auto lowerBoundIterator{mTimedValues.lower_bound(initWindowTimestamp)};
-        removedValues += std::prev(lowerBoundIterator)->second;
+        removedValues = std::prev(lowerBoundIterator)->second;
         mTimedValues.erase(mTimedValues.begin(), lowerBoundIterator);
     }
 }
 
-m_off_t TimedCache::getTimedValues(mega::dstime windowTimeDeciseconds)
+int64_t TimedCache::getTimedValues(uint32_t windowTimeDeciseconds) const
 {
     if(mTimedValues.empty())
     {
@@ -37,8 +43,8 @@ m_off_t TimedCache::getTimedValues(mega::dstime windowTimeDeciseconds)
         return mTimedValues.rbegin()->second - removedValues;
     }
 
-    const auto initWindowTimestamp{mTimedValues.rbegin()->first - windowTimeDeciseconds};
+    const auto initWindowTimestamp{mTimedValues.rbegin()->first - windowTimeDeciseconds + 1};
     const auto lowerBoundIterator{mTimedValues.lower_bound(initWindowTimestamp)};
-    const auto values{mTimedValues.rbegin()->second - lowerBoundIterator->second};
-    return values - removedValues;
+    const auto values{mTimedValues.rbegin()->second - std::prev(lowerBoundIterator)->second};
+    return values;
 }

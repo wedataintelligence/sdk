@@ -1,16 +1,15 @@
 #pragma once
-#include "mega/http.h"
-#include "mega/types.h"
+#include <cstdint>
+#include <map>
 
 class TimedCache
 {
 public:
-    void addTimedValues(mega::dstime decisecondTimestamp, m_off_t values);
+    void addTimedValues(uint32_t decisecondTimestamp, int64_t values);
+    int64_t getTimedValues(uint32_t windowTimeDeciseconds) const;
 
-    m_off_t getTimedValues(mega::dstime windowTimeDeciseconds);
 private:
-    const mega::dstime mMaxWindowTimeDeciseconds{10*20}; // 20 seconds max
-    mega::dstime lastAddedTimestamp{0};
-    std::map<mega::dstime, m_off_t> mTimedValues;
-    m_off_t removedValues{0};
+    const uint32_t mMaxWindowTimeDeciseconds{10*20}; // 20 seconds max
+    std::map<uint32_t, int64_t> mTimedValues;
+    int64_t removedValues{0};
 };
