@@ -36,11 +36,14 @@
 
 namespace mega {
 
-// interval to calculate the mean speed (ds)
-const int SpeedController::SPEED_MEAN_INTERVAL_DS = 50;
+// interval to calculate the current speed (ds)
+const int SpeedController::SPEED_INTERVAL_DS = 50; // 5 secs
 
-// max time to calculate the mean speed
-const int SpeedController::SPEED_MAX_VALUES = 10000;
+// interval to calculate the mean speed (ds)
+const int SpeedController::SPEED_MEAN_DEFAULT_INTERVAL_DS = 100; // 10 secs
+
+// max interval allowed to calculate the mean speed (ds)
+const int SpeedController::SPEED_MEAN_MAX_INTERVAL_DS = 300; // 30 secs
 
 // data receive timeout (ds)
 const int HttpIO::NETWORKTIMEOUT = 6000;
@@ -772,58 +775,28 @@ m_off_t HttpReqUL::transferred(MegaClient* client)
 }
 
 SpeedController::SpeedController()
+    :timedCache{SPEED_MEAN_MAX_INTERVAL_DS}
 {
-    partialBytes = 0;
-    meanSpeed = 0;
-    lastUpdate = 0;
-    speedCounter = 0;
+}
+
+m_off_t calculateWindowSpeed(long long numBytes, dstime windowTime)
+{
+    return numBytes * 10 / windowTime;
 }
 
 m_off_t SpeedController::calculateSpeed(long long numBytes)
 {
-    dstime currentTime = Waiter::ds;
-    if (numBytes <= 0 && lastUpdate == currentTime)
-    {
-        return (partialBytes * 10) / SPEED_MEAN_INTERVAL_DS;
-    }
-
-    while (transferBytes.size())
-    {
-        map<dstime, m_off_t>::iterator it = transferBytes.begin();
-        dstime deltaTime = currentTime - it->first;
-        if (deltaTime < SPEED_MEAN_INTERVAL_DS)
-        {
-            break;
-        }
-
-        partialBytes -= it->second;
-        transferBytes.erase(it);
-    }
-
-    if (numBytes > 0)
-    {
-        transferBytes[currentTime] += numBytes;
-        partialBytes += numBytes;
-    }
-
-    m_off_t speed = (partialBytes * 10) / SPEED_MEAN_INTERVAL_DS;
-    if (numBytes)
-    {
-        meanSpeed = meanSpeed * speedCounter + speed;
-        speedCounter++;
-        meanSpeed /= speedCounter;
-        if (speedCounter > SPEED_MAX_VALUES)
-        {
-            speedCounter = SPEED_MAX_VALUES;
-        }
-    }
-    lastUpdate = currentTime;
-    return speed;
+    const auto currentTime{Waiter::ds};
+    numBytes = std::max(static_cast<long long>(0), numBytes);
+    timedCache.addTimedValues(currentTime, numBytes);
+    const auto valuesSpeedInterval{timedCache.getTimedValues(SPEED_INTERVAL_DS)};
+    return calculateWindowSpeed(valuesSpeedInterval, SPEED_INTERVAL_DS);
 }
 
-m_off_t SpeedController::getMeanSpeed()
+m_off_t SpeedController::getMeanSpeed(dstime windowTimeDeciseconds)
 {
-    return meanSpeed;
+    const auto valuesSpeedInterval{timedCache.getTimedValues(windowTimeDeciseconds)};
+    return calculateWindowSpeed(valuesSpeedInterval, windowTimeDeciseconds);
 }
 
 GenericHttpReq::GenericHttpReq(PrnGen &rng, bool binary)

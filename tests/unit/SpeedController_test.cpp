@@ -1,4 +1,4 @@
-/**
+﻿/**
  * (c) 2019 by Mega Limited, Wellsford, New Zealand
  *
  * This file is part of the MEGA SDK - Client Access Engine.
@@ -21,6 +21,44 @@
 
 using namespace mega;
 
+TEST(SpeedController, calculateMeanSpeed)
+{
+    SpeedController speedController;
+    constexpr auto totalBytes{10};
+
+    Waiter::ds = 0;
+    EXPECT_EQ(speedController.calculateSpeed(totalBytes), 2);
+    EXPECT_EQ(speedController.getMeanSpeed(), 1);
+
+    constexpr auto zeroBytes{0};
+    EXPECT_EQ(speedController.calculateSpeed(zeroBytes), 2);
+    EXPECT_EQ(speedController.getMeanSpeed(), 1);
+
+    // handle wrong values correctly
+    constexpr auto negativeBytes{-100};
+    EXPECT_EQ(speedController.calculateSpeed(negativeBytes), 2);
+    EXPECT_EQ(speedController.getMeanSpeed(), 1);
+
+    EXPECT_EQ(speedController.calculateSpeed(totalBytes), 4);
+    EXPECT_EQ(speedController.getMeanSpeed(), 2);
+
+    Waiter::ds = 1;
+    EXPECT_EQ(speedController.calculateSpeed(totalBytes), 6);
+    EXPECT_EQ(speedController.getMeanSpeed(), 3);
+
+    Waiter::ds = SpeedController::SPEED_INTERVAL_DS-1;
+    EXPECT_EQ(speedController.calculateSpeed(totalBytes), 8);
+    EXPECT_EQ(speedController.getMeanSpeed(), 4);
+
+    Waiter::ds = SpeedController::SPEED_MEAN_DEFAULT_INTERVAL_DS - 1;
+    EXPECT_EQ(speedController.calculateSpeed(totalBytes), 2);
+    EXPECT_EQ(speedController.getMeanSpeed(), 5);
+
+    Waiter::ds += SpeedController::SPEED_MEAN_DEFAULT_INTERVAL_DS;
+    EXPECT_EQ(speedController.calculateSpeed(totalBytes), 2);
+    EXPECT_EQ(speedController.getMeanSpeed(), 1);
+}
+
 TEST(SpeedController, calculateMeanSpeedOneSamplePerTimeInterval)
 {
     // calculate speed only once per time interval, SPEED_MEAN_INTERVAL_DS = 50 (5secs)
@@ -32,9 +70,8 @@ TEST(SpeedController, calculateMeanSpeedOneSamplePerTimeInterval)
     for(int i=0; i<10000; i++)
     {
         speed = speedController.calculateSpeed(totalBytes);
-        EXPECT_EQ(speed, 2); // 10 bytes in 5 seconds is 2 bytes in 1 second
-        EXPECT_EQ(speedController.getMeanSpeed(), 2);
-        Waiter::ds += SpeedController::SPEED_MEAN_INTERVAL_DS;
+        EXPECT_EQ(speed, 2); // 10 bytes in 5 seconds is 2 bytes in 1 second        
+        Waiter::ds += SpeedController::SPEED_INTERVAL_DS;
     }
     EXPECT_EQ(speedController.getMeanSpeed(), 2);
 }
@@ -52,17 +89,15 @@ TEST(SpeedController, calculateMeanSpeedThounsendSamplesPerTimeInterval)
         speed = speedController.calculateSpeed(totalBytes);
     }
     EXPECT_EQ(speed, 20000); // 10*10000 bytes in 5 seconds is 2*10000 bytes in 1 second
-    EXPECT_EQ(speedController.getMeanSpeed(), 10001);
-    // this is a mean of last 10000 speed calculations recived but it does not take into account when they were received
-    // could be far ago, so it would be not very usefull. Hopefully transfers do not stop for a long time, but still is not correct.
+    EXPECT_EQ(speedController.getMeanSpeed(), 10000); // mean in 10 seconds window
 
-    Waiter::ds += SpeedController::SPEED_MEAN_INTERVAL_DS;
+    Waiter::ds += SpeedController::SPEED_INTERVAL_DS;
     for(int i=0; i<10000; i++)
     {
         speed = speedController.calculateSpeed(totalBytes);
     }
     EXPECT_EQ(speed, 20000); // 10*10000 bytes in 5 seconds is 2*10000 bytes in 1 second
-    EXPECT_EQ(speedController.getMeanSpeed(), 8334);
+    EXPECT_EQ(speedController.getMeanSpeed(), 20000);
 }
 
 TEST(SpeedController, calculateMeanSpeedJumpingTimeSlots)
@@ -76,8 +111,8 @@ TEST(SpeedController, calculateMeanSpeedJumpingTimeSlots)
     {
         auto speed{speedController.calculateSpeed(totalBytes)};
         EXPECT_EQ(speed, 2); // 5 bytes in 5 seconds is 1 bytes in 1 second
-        EXPECT_EQ(speedController.getMeanSpeed(), 2);
-        Waiter::ds += SpeedController::SPEED_MEAN_INTERVAL_DS*2;
+        EXPECT_EQ(speedController.getMeanSpeed(), 1);
+        Waiter::ds += SpeedController::SPEED_INTERVAL_DS*2;
     }
 }
 
@@ -91,148 +126,29 @@ TEST(SpeedController, calculateMeanSpeedAfterReceivingZeroBytes)
     constexpr auto totalCalculations{25};
     for(auto i=0; i < totalCalculations; i++)
     {
+        Waiter::ds += SpeedController::SPEED_INTERVAL_DS;
         auto speed{speedController.calculateSpeed(totalBytes)};
-        EXPECT_EQ(speed, 2); // 10 bytes in 5 seconds is 2 bytes in 1 second
-        Waiter::ds += SpeedController::SPEED_MEAN_INTERVAL_DS;
+        EXPECT_EQ(speed, 2); // 10 bytes in 5 seconds is 2 bytes in 1 second            
+    }
+    EXPECT_EQ(speedController.getMeanSpeed(), 2);
+
+    constexpr auto zeroBytes{0};
+    for(auto i=0; i < totalCalculations; i++)
+    {
+        const auto speed{speedController.calculateSpeed(zeroBytes)};
+        EXPECT_EQ(speed, 2);
         EXPECT_EQ(speedController.getMeanSpeed(), 2);
     }
 
-    totalBytes = 0;
-    for(auto i=0; i < totalCalculations; i++)
-    {
-        auto speed{speedController.calculateSpeed(totalBytes)};
-        EXPECT_EQ(speed, 0); // 0 bytes in 5 seconds is 0 bytes in 1 second
-        Waiter::ds += SpeedController::SPEED_MEAN_INTERVAL_DS;
-        EXPECT_EQ(speedController.getMeanSpeed(), 2); // 0 bytes does not count for mean calculation
-    }
-}
+    Waiter::ds += SpeedController::SPEED_INTERVAL_DS;
+    auto speed{speedController.calculateSpeed(zeroBytes)};
+    EXPECT_EQ(speed, 0);
+    EXPECT_EQ(speedController.getMeanSpeed(), 1);
 
-TEST(SpeedController, calculateMeanSpeedThreeSamplesPerTimeInterval)
-{
-    // Let's do a more complete use case
-    Waiter::ds = 0;
-    SpeedController speedController;
-    constexpr auto totalBytes{10};
-
-    auto speed{speedController.calculateSpeed(totalBytes)};
-    EXPECT_EQ(speed, 2); // 10 bytes in 5 seconds is 2 bytes in 1 second
-    EXPECT_EQ(speedController.getMeanSpeed(), 2);
-
-    speed = speedController.calculateSpeed(totalBytes);
-    EXPECT_EQ(speed, 4); // 20 bytes in 5 seconds is 4 bytes in 1 second
-    EXPECT_EQ(speedController.getMeanSpeed(), 3); // mean of 2 and 4
-
-    speed = speedController.calculateSpeed(totalBytes);
-    EXPECT_EQ(speed, 6); // 30 bytes in 5 seconds is 6 bytes in 1 second
-    EXPECT_EQ(speedController.getMeanSpeed(), 4); // mean of 2, 4 and 6
-
-    // now the new calculation will be done in a different time interval
-    Waiter::ds += SpeedController::SPEED_MEAN_INTERVAL_DS;
-    speed = speedController.calculateSpeed(totalBytes);
-    EXPECT_EQ(speed, 2); // 10 bytes in 5 seconds is 4 bytes in 1 second
-    EXPECT_EQ(speedController.getMeanSpeed(), 3); // mean of 2, 4, 6 and 2 (3.5)
-
-    speed = speedController.calculateSpeed(totalBytes);
-    EXPECT_EQ(speed, 4); // 20 bytes in 5 seconds is 4 bytes in 1 second
-    EXPECT_EQ(speedController.getMeanSpeed(), 3); // mean of 2, 4, 6, 2 and 4 (3.6)
-
-    speed = speedController.calculateSpeed(totalBytes);
-    EXPECT_EQ(speed, 6); // 30 bytes in 5 seconds is 6 bytes in 1 second
-    EXPECT_EQ(speedController.getMeanSpeed(), 3); // WRONG!
-    // this mean should be 4: mean of 2, 4, 6, 2, 4 and 6
-
-    // now the new calculation will be done in a different time interval
-    Waiter::ds += SpeedController::SPEED_MEAN_INTERVAL_DS;
-    speed = speedController.calculateSpeed(totalBytes);
-    EXPECT_EQ(speed, 2); // 10 bytes in 5 seconds is 4 bytes in 1 second
-    EXPECT_EQ(speedController.getMeanSpeed(), 2); // mean of 3x6 and 2
-
-    speed = speedController.calculateSpeed(totalBytes);
-    EXPECT_EQ(speed, 4); // 20 bytes in 5 seconds is 4 bytes in 1 second
-    EXPECT_EQ(speedController.getMeanSpeed(), 2); // mean of 2x6 and 4
-
-    speed = speedController.calculateSpeed(totalBytes);
-    EXPECT_EQ(speed, 6); // 30 bytes in 5 seconds is 6 bytes in 1 second
-    EXPECT_EQ(speedController.getMeanSpeed(), 2); // mean of 2x7 and 6
-
-    // now the new calculation will be done in a different time interval
-    Waiter::ds += SpeedController::SPEED_MEAN_INTERVAL_DS;
-    speed = speedController.calculateSpeed(0);
-    EXPECT_EQ(speed, 0); // 0 bytes in 5 seconds is 0 bytes in 1 second
-    EXPECT_EQ(speedController.getMeanSpeed(), 2); // last mean
-
-    // now the new calculation will be done in a different time interval
-    Waiter::ds += SpeedController::SPEED_MEAN_INTERVAL_DS;
-    speed = speedController.calculateSpeed(0);
-    EXPECT_EQ(speed, 0); // 0 bytes in 5 seconds is 0 bytes in 1 second
-    EXPECT_EQ(speedController.getMeanSpeed(), 2); // last mean
-
-    // now the new calculation will be done in a different time interval
-    Waiter::ds += SpeedController::SPEED_MEAN_INTERVAL_DS;
-    speed = speedController.calculateSpeed(totalBytes);
-    EXPECT_EQ(speed, 2); // 10 bytes in 5 seconds is 2 bytes in 1 second
-    EXPECT_EQ(speedController.getMeanSpeed(), 2); // mean of 2x8 and 2
-
-    speed = speedController.calculateSpeed(totalBytes);
-    EXPECT_EQ(speed, 4); // 20 bytes in 5 seconds is 4 bytes in 1 second
-    EXPECT_EQ(speedController.getMeanSpeed(), 2); // mean of 2x9 and 4
-
-    speed = speedController.calculateSpeed(totalBytes);
-    EXPECT_EQ(speed, 6); // 30 bytes in 5 seconds is 6 bytes in 1 second
-    EXPECT_EQ(speedController.getMeanSpeed(), 2); // mean of 2x10 and 6
-
-    // now the new calculation will be done in a different time interval
-    Waiter::ds += SpeedController::SPEED_MEAN_INTERVAL_DS;
-    speed = speedController.calculateSpeed(1);
-    EXPECT_EQ(speed, 0); // 1 bytes in 5 seconds is 0.2 bytes in 1 second
-    EXPECT_EQ(speedController.getMeanSpeed(), 1); // mean of 2x11 and 0
-
-    speed = speedController.calculateSpeed(1);
-    EXPECT_EQ(speed, 0); // 2 bytes in 5 seconds is 0.4 bytes in 1 second
-    EXPECT_EQ(speedController.getMeanSpeed(), 0); // mean of 1x12 and 0
-
-    speed = speedController.calculateSpeed(1);
-    EXPECT_EQ(speed, 0); // 3 bytes in 5 seconds is 0.6 bytes in 1 second
-    EXPECT_EQ(speedController.getMeanSpeed(), 0); // mean of 0x13 and 0
-
-    // Calculating speed with samples lower than 5 bytes will bring the mean to zero
-}
-
-TEST(SpeedController, calculateMeanSpeedSmallTimeIntervals)
-{
-    Waiter::ds = 0;
-    SpeedController speedController;
-    auto totalBytes(10);
-
-    auto speed{speedController.calculateSpeed(totalBytes)};
-    EXPECT_EQ(speed, 2); // 10 bytes in 5 seconds is 2 bytes in 1 second
-    EXPECT_EQ(speedController.getMeanSpeed(), 2);
-
-    Waiter::ds++;
-    speed = speedController.calculateSpeed(totalBytes);
-    EXPECT_EQ(speed, 4); // 20 bytes in 5 seconds is 4 bytes in 1 second
-    EXPECT_EQ(speedController.getMeanSpeed(), 3); // mean of 2 and 4
-
-    Waiter::ds++;
-    speed = speedController.calculateSpeed(totalBytes);
-    EXPECT_EQ(speed, 6); // 30 bytes in 5 seconds is 6 bytes in 1 second
-    EXPECT_EQ(speedController.getMeanSpeed(), 4); // mean of 3x2 and 6
-
-    // now the new calculation will be done in a different time interval
-    Waiter::ds += SpeedController::SPEED_MEAN_INTERVAL_DS;
-    speed = speedController.calculateSpeed(totalBytes);
-    EXPECT_EQ(speed, 2); // 10 bytes in 5 seconds is 4 bytes in 1 second
-    EXPECT_EQ(speedController.getMeanSpeed(), 3); // mean of 4x3 and 2
-
-    Waiter::ds++;
-    speed = speedController.calculateSpeed(totalBytes);
-    EXPECT_EQ(speed, 4); // 20 bytes in 5 seconds is 4 bytes in 1 second
-    EXPECT_EQ(speedController.getMeanSpeed(), 3); // mean of 2 and 4
-
-    Waiter::ds++;
-    speed = speedController.calculateSpeed(totalBytes);
-    EXPECT_EQ(speed, 6); // 30 bytes in 5 seconds is 6 bytes in 1 second
-    EXPECT_EQ(speedController.getMeanSpeed(), 3); // mean of 3x2 and 6
+    Waiter::ds += SpeedController::SPEED_INTERVAL_DS;
+    speed = speedController.calculateSpeed(zeroBytes);
+    EXPECT_EQ(speed, 0);
+    EXPECT_EQ(speedController.getMeanSpeed(), 0);
 }
 
 TEST(SpeedController, calculateMeanSpeedSmallBytesValue)
@@ -241,20 +157,17 @@ TEST(SpeedController, calculateMeanSpeedSmallBytesValue)
     SpeedController speedController;
     constexpr auto totalBytes{5};
 
-    m_off_t speed;
     for(int i=0; i<10000; i++)
     {
+        Waiter::ds += SpeedController::SPEED_INTERVAL_DS;
         const auto speed{speedController.calculateSpeed(totalBytes)};
-        EXPECT_EQ(speed, 1); // 5 bytes in 5 seconds is 1 bytes in 1 second
-        EXPECT_EQ(speedController.getMeanSpeed(), 1);
-        Waiter::ds += SpeedController::SPEED_MEAN_INTERVAL_DS;
+        EXPECT_EQ(speed, 1); // 5 bytes in 5 seconds is 1 bytes in 1 second        
     }
+    EXPECT_EQ(speedController.getMeanSpeed(), 1);
 
-    // after ten thousend values a simple value less than 5 bytes
-    // force the mean speed to be zero. This isn't right, is it?
-    speed = speedController.calculateSpeed(4);
-    EXPECT_EQ(speed, 0); // 4 bytes in 5 seconds is 0 bytes in 1 second
-    EXPECT_EQ(speedController.getMeanSpeed(), 0); // mean of 1x100000 and 0
+    const auto speed = speedController.calculateSpeed(4);
+    EXPECT_EQ(speed, 1); // 4 bytes in 5 seconds is 0 bytes in 1 second
+    EXPECT_EQ(speedController.getMeanSpeed(), 1);
 }
 
 TEST(SpeedController, calculateSpeedPerformance)
@@ -274,12 +187,10 @@ TEST(SpeedController, calculateSpeedPerformance)
     const auto end{std::chrono::steady_clock::now()};
 
     EXPECT_EQ(speed, 100);
-    EXPECT_EQ(speedController.getMeanSpeed(), 51);
+    EXPECT_EQ(speedController.getMeanSpeed(), 100);
 
     const auto elapsed{end-start};
     const auto micros{std::chrono::duration_cast<std::chrono::microseconds>(elapsed).count()/totalCalculations};
     std::cout << "[          ] time micros = " << micros << std::endl;
-    // time micros = 0.045727 in a Intel® Core™ i7-9750H CPU @ 2.60GHz × 12 (Release)
-}
-}
+    // time micros = 0.079198 in a Intel® Core™ i7-9750H CPU @ 2.60GHz × 12 (Release)
 }

@@ -1,5 +1,10 @@
 #include "mega/timedcache.h"
 
+TimedCache::TimedCache(uint32_t maxWindowTimeDeciseconds)
+    :mMaxWindowTimeDeciseconds{maxWindowTimeDeciseconds}
+{
+}
+
 void TimedCache::addTimedValues(uint32_t decisecondTimestamp, int64_t values)
 {
     if(mTimedValues.empty())

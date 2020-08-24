@@ -26,6 +26,7 @@
 #include "waiter.h"
 #include "backofftimer.h"
 #include "utils.h"
+#include "timedcache.h"
 
 #ifndef _WIN32
 #include <sys/types.h>
@@ -96,26 +97,25 @@ namespace mega {
                          "2405:f900:3e6a:1::103,31.216.148.11," \
                          "2403:9800:c020::43,122.56.56.216"
 
+
 class MEGA_API SpeedController
 {
 public:
     SpeedController();
     m_off_t calculateSpeed(long long numBytes = 0);
-    m_off_t getMeanSpeed();
+    m_off_t getMeanSpeed(dstime windowTimeDeciseconds = SPEED_MEAN_DEFAULT_INTERVAL_DS);
+
+    // interval to calculate the current speed (ds)
+    static const int SPEED_INTERVAL_DS;
 
     // interval to calculate the mean speed (ds)
-    static const int SPEED_MEAN_INTERVAL_DS;
+    static const int SPEED_MEAN_DEFAULT_INTERVAL_DS;
 
-    // max values to calculate the mean speed
-    static const int SPEED_MAX_VALUES;
+    // max interval allowed to calculate the mean speed (ds)
+    static const int SPEED_MEAN_MAX_INTERVAL_DS;
 
 protected:
-    map<dstime, m_off_t> transferBytes;
-    m_off_t partialBytes;
-
-    m_off_t meanSpeed;
-    dstime lastUpdate;
-    int speedCounter;
+    TimedCache timedCache;
 };
 
 // generic host HTTP I/O interface

@@ -4,7 +4,8 @@
 
 TEST(TimedCache, storeAndRetrieveValues)
 {
-    TimedCache timedCache;
+    constexpr auto maxTimeWindowDeciseconds{300};
+    TimedCache timedCache(maxTimeWindowDeciseconds);
     EXPECT_EQ(timedCache.getTimedValues(5), 0);
 
     timedCache.addTimedValues(0, 10);
@@ -49,7 +50,8 @@ TEST(TimedCache, storeAndRetrieveValues)
 
 TEST(TimedCache, calculateTimedCachePerformance)
 {
-    TimedCache timedCache;
+    constexpr auto maxTimeWindowDeciseconds{300};
+    TimedCache timedCache(maxTimeWindowDeciseconds);
     constexpr auto values(10);
     constexpr auto totalCalculations(1e6);
     uint32_t timestampDeciseconds = 0;
