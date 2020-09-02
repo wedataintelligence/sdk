@@ -4154,6 +4154,31 @@ typedef NS_ENUM(NSInteger, AffiliateType) {
 #pragma mark - Account management Requests
 
 /**
+ * @brief Get the sum of sizes of all the files stored in the MEGA cloud.
+ *
+ * The associated request type with this request is MegaRequest::TYPE_GET_CLOUDSTORAGEUSED
+ *
+ * Valid data in the MegaRequest object received in onRequestFinish when the error code
+ * is MegaError::API_OK:
+ * - MegaRequest::getNumber - returns the cloud storage bytes used (calculated locally from the node data structures)
+ *
+ * @param delegate Delegate to track this request.
+ */
+- (void)getCloudStorageUsedWithDelegate:(id<MEGARequestDelegate>)delegate;
+
+/**
+ * @brief Get the sum of sizes of all the files stored in the MEGA cloud.
+ *
+ * The associated request type with this request is MegaRequest::TYPE_GET_CLOUDSTORAGEUSED
+ *
+ * Valid data in the MegaRequest object received in onRequestFinish when the error code
+ * is MegaError::API_OK:
+ * - MegaRequest::getNumber - returns the cloud storage bytes used (calculated locally from the node data structures)
+ *
+ */
+- (void)getCloudStorageUsed;
+
+/**
  * @brief Get details about the MEGA account.
  *
  * The associated request type with this request is MEGARequestTypeAccountDetails.

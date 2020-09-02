@@ -1221,6 +1221,14 @@ using namespace mega;
     self.megaApi->getAccountDetails();
 }
 
+- (void)getCloudStorageUsedWithDelegate:(id<MEGARequestDelegate>)delegate {
+    self.megaApi->getCloudStorageUsed([self createDelegateMEGARequestListener:delegate singleListener:YES]);
+}
+
+- (void)getCloudStorageUsed {
+    self.megaApi->getCloudStorageUsed();
+}
+
 - (void)queryTransferQuotaWithSize:(long long)size delegate:(id<MEGARequestDelegate>)delegate {
     self.megaApi->queryTransferQuota(size, [self createDelegateMEGARequestListener:delegate singleListener:YES]);
 }
