@@ -411,6 +411,14 @@ using namespace mega;
     self.megaApi->retryPendingConnections(true, true);
 }
 
+- (void)setDnsServers:(NSString *)dnsServers delegate:(id<MEGARequestDelegate>)delegate {
+    self.megaApi->setDnsServers(dnsServers.UTF8String, [self createDelegateMEGARequestListener:delegate singleListener:YES]);
+}
+
+- (void)setDnsServers:(NSString *)dnsServers {
+    self.megaApi->setDnsServers(dnsServers.UTF8String);
+}
+
 - (BOOL)serverSideRubbishBinAutopurgeEnabled {
     return self.megaApi->serverSideRubbishBinAutopurgeEnabled();
 }

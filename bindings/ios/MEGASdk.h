@@ -656,6 +656,46 @@ typedef NS_ENUM(NSInteger, AffiliateType) {
 - (void)reconnect;
 
 /**
+ * @brief Use custom DNS servers
+ *
+ * Since the usage of this function implies a change in DNS servers used by the SDK, all connections are
+ * closed and restarted using the new list of new DNS servers, so calling this function too often can cause
+ * many retries and problems to complete requests. Please use it only at startup or when DNS servers need to be changed.
+ *
+ * The associated request type with this request is MEGARequestTypeRetryPendingConnections.
+ * Valid data in the MEGARequest object received on callbacks:
+ * - [MEGARequest text] - Returns the new list of DNS servers
+ *
+ * @param dnsServers New list of DNS servers. It must be a list of IPs separated by a comma character ",".
+ * IPv6 servers are allowed (without brackets).
+ *
+ * The usage of this function will trigger the callback [MEGAGlobalDelegate onEvent:event:] and the callback
+ * [MEGADelegate onEvent:event:] with the event type MEGAEventDisconnect.
+ *
+ * @param delegate MEGARequestDelegate to track this request
+ */
+- (void)setDnsServers:(NSString *)dnsServers delegate:(id<MEGARequestDelegate>)delegate;
+
+/**
+ * @brief Use custom DNS servers
+ *
+ * Since the usage of this function implies a change in DNS servers used by the SDK, all connections are
+ * closed and restarted using the new list of new DNS servers, so calling this function too often can cause
+ * many retries and problems to complete requests. Please use it only at startup or when DNS servers need to be changed.
+ *
+ * The associated request type with this request is MEGARequestTypeRetryPendingConnections.
+ * Valid data in the MEGARequest object received on callbacks:
+ * - [MEGARequest text] - Returns the new list of DNS servers
+ *
+ * @param dnsServers New list of DNS servers. It must be a list of IPs separated by a comma character ",".
+ * IPv6 servers are allowed (without brackets).
+ *
+ * The usage of this function will trigger the callback [MEGAGlobalDelegate onEvent:event:] and the callback
+ * [MEGADelegate onEvent:event:] with the event type MEGAEventDisconnect.
+ */
+- (void)setDnsServers:(NSString *)dnsServers;
+
+/**
  * @brief Check if server-side Rubbish Bin autopurging is enabled for the current account
  * @return YES if this feature is enabled. Otherwise NO.
  */
