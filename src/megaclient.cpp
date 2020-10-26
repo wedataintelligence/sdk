@@ -9135,12 +9135,17 @@ void MegaClient::proctree(Node* n, TreeProc* tp, bool skipinshares, bool skipver
             Node *child = *it++;
             if (!(skipinshares && child->inshare))
             {
+                LOG_err << "MegaClient::proctree prev proctree: " << child << " n.dispname=" << (child ? child->displayname() : nullptr);
                 proctree(child, tp, skipinshares);
+                LOG_err << "MegaClient::proctree post proctree: " << child << " n.dispname=" << (child ? child->displayname() : nullptr);
+
             }
         }
     }
-
+    LOG_err << "MegaClient::proctree prev proc: " << n << " n.dispname=" << (n ? n->displayname() : nullptr);
     tp->proc(this, n);
+    LOG_err << "MegaClient::proctree post proc " << n << " n.dispname=" << (n ? n->displayname() : nullptr);
+
 }
 
 // queue PubKeyAction request to be triggered upon availability of the user's
@@ -9573,7 +9578,9 @@ void MegaClient::senddevcommand(const char *command, const char *email)
 // queue node for notification
 void MegaClient::notifynode(Node* n)
 {
+    LOG_err << "MegaClient::notifynode prev apply keys " << n << " n.dispname=" << (n ? n->displayname() : nullptr);
     n->applykey();
+    LOG_err << "MegaClient::notifynode post apply keys" << n << " n.dispname=" << (n ? n->displayname() : nullptr);
 
     if (!fetchingnodes)
     {
@@ -9613,6 +9620,14 @@ void MegaClient::notifynode(Node* n)
         }
 
 #ifdef ENABLE_SYNC
+
+        LOG_err << "MegaClient::notifynode, n=" << n
+                  << " n.dispname=" << (n ? n->displayname() : nullptr)
+                  << " n->localnode=" << n->localnode
+                  << " n->localnode->parent=" << (n->localnode ? (void *)n->localnode->parent : (void *)"no_localnode")
+                  << " n->parent=" << n->parent
+                  << " n->parent->localnode=" << (n->parent ? (void *)n->parent->localnode : (void *)"no_parent");
+
         // is this a synced node that was moved to a non-synced location? queue for
         // deletion from LocalNodes.
         if (n->localnode && n->localnode->parent && n->parent && !n->parent->localnode)

@@ -76,7 +76,9 @@ void TreeProcDel::proc(MegaClient* client, Node* n)
 {
     n->changed.removed = true;
     n->tag = client->reqtag;
+    LOG_err << "TreeProcDel::proc pArev notifynode: " << n << " n.dispname=" << (n ? n->displayname() : nullptr);
     client->notifynode(n);
+    LOG_err << "TreeProcDel::proc post notifynode: " << n << " n.dispname=" << (n ? n->displayname() : nullptr);
     if (n->owner != client->me)
     {
         client->useralerts.noteSharedNode(n->owner, n->type, 0, NULL);
