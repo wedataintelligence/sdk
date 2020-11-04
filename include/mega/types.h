@@ -613,6 +613,8 @@ typedef enum {
     ATTR_DEVICE_NAMES = 30,                 // private - byte array - versioned
     ATTR_MY_BACKUPS_FOLDER = 31,            // private - byte array - non-versioned
     ATTR_BACKUP_NAMES = 32,                 // private - byte array - versioned
+    ATTR_XBACKUP_CONFIG_NAME = 33,          // private - unencrypted - char array - versioned
+    ATTR_XBACKUP_CONFIG_KEY = 34            // private - unencrypted - char array - versioned
 
 } attr_t;
 typedef map<attr_t, string> userattr_map;
@@ -880,6 +882,8 @@ public:
         TYPE_TWOWAY = TYPE_UP | TYPE_DOWN, // Two-way sync
         TYPE_BACKUP = 0x04
     };
+
+    SyncConfig() = default;
 
     SyncConfig(int tag,
                std::string localPath,
