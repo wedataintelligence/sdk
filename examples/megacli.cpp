@@ -8665,7 +8665,7 @@ void exec_backuplistconfigs(autocomplete::ACState& s)
     string filterName = "any";
 
     // backup list configs [external|internal]
-    if (s.words.size() > 2)
+    if (s.words.size() > 3)
     {
         filterName = s.words[3].s;
     }
