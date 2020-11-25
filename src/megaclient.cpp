@@ -4248,6 +4248,7 @@ void MegaClient::locallogout(bool removecaches)
     unshareablekey.clear();
 #ifdef ENABLE_SYNC
     mXBackupConfigStore.reset();
+    mXBackupConfigIOContext.reset();
 #endif // ENABLE_SYNC
     publichandle = UNDEF;
     cachedscsn = UNDEF;
@@ -5108,13 +5109,17 @@ XBackupConfigStore* MegaClient::xBackupConfigStore()
         return nullptr;
     }
 
+    // Create the IO context.
+    mXBackupConfigIOContext.reset(
+      new XBackupConfigIOContext(key,
+                                 *fsaccess,
+                                 *configKey,
+                                 *configName,
+                                 rng));
+
     // Create the store.
     mXBackupConfigStore.reset(
-      new XBackupConfigStore(key,
-                             *fsaccess,
-                             *configKey,
-                             *configName,
-                             rng));
+      new XBackupConfigStore(*mXBackupConfigIOContext));
 
     // Return a reference to the newly created store.
     return mXBackupConfigStore.get();
